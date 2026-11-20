@@ -4,12 +4,12 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
-  AppColors,
-  AppFontSize,
-  AppSpacing,
-  BottomNavigationHeight,
-  MainNavigationItems,
-  type NavigationItem,
+    AppColors,
+    AppFontSize,
+    AppSpacing,
+    BottomNavigationHeight,
+    MainNavigationItems,
+    type NavigationItem,
 } from '@/constants';
 
 export interface BottomNavigationProps {
@@ -43,6 +43,7 @@ export function BottomNavigation({ items = MainNavigationItems }: BottomNavigati
             <Text style={[styles.label, isActive && styles.labelActive]} numberOfLines={1}>
               {item.label}
             </Text>
+            {isActive ? <View style={styles.activeIndicator} /> : null}
           </Pressable>
         );
       })}
@@ -56,14 +57,14 @@ const styles = StyleSheet.create({
     backgroundColor: AppColors.white,
     borderTopWidth: 1,
     borderTopColor: AppColors.border,
-    paddingTop: AppSpacing.sm,
+    paddingTop: AppSpacing.xs,
   },
   item: {
     flex: 1,
-    minHeight: BottomNavigationHeight - AppSpacing.md,
+    minHeight: BottomNavigationHeight - AppSpacing.sm,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 2,
+    gap: AppSpacing.xs,
   },
   pressed: {
     opacity: 0.7,
@@ -75,5 +76,11 @@ const styles = StyleSheet.create({
   labelActive: {
     color: AppColors.primary,
     fontWeight: '700',
+  },
+  activeIndicator: {
+    width: 48,
+    height: 2,
+    borderRadius: 1,
+    backgroundColor: AppColors.primary,
   },
 });

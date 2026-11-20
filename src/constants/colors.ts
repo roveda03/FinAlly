@@ -1,8 +1,8 @@
 export const AppColors = {
-  primaryDark: '#075C49',
-  primary: '#087F5B',
-  primaryLight: '#DDF3EA',
-  background: '#F7FAF8',
+  primaryDark: '#064B3D',
+  primary: '#087B56',
+  primaryLight: '#DDF4EA',
+  background: '#F5F9F7',
   white: '#FFFFFF',
   textPrimary: '#153B35',
   textSecondary: '#687B75',

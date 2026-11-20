@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
 import {
   Alert,
@@ -16,40 +17,13 @@ import {
 import { Card } from '@/components/cards';
 import { Button, Header } from '@/components/common';
 import { Input } from '@/components/forms';
-import { AppColors, AppFontSize, AppRadius, AppSpacing, BottomNavigationHeight } from '@/constants';
+import { AppColors, AppFontSize, AppRadius, AppSpacing } from '@/constants';
 import { useFinance } from '@/hooks/use-finance';
 import type { Goal } from '@/types';
 import { calculateGoalProgress, formatCurrency, formatDate, formatPercentage } from '@/utils';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 // ─── Resumo ──────────────────────────────────────────────────────────
-function GoalsSummary() {
-  const { goals } = useFinance();
-  const totalTarget = goals.reduce((s, g) => s + g.targetAmount, 0);
-  const totalCurrent = goals.reduce((s, g) => s + g.currentAmount, 0);
-
-  return (
-    <View style={styles.summaryRow}>
-      <View style={[styles.summaryItem, { backgroundColor: AppColors.primaryLight }]}>
-        <Text style={styles.summaryItemLabel}>Metas</Text>
-        <Text style={[styles.summaryItemValue, { color: AppColors.primary }]}>{goals.length}</Text>
-      </View>
-      <View style={[styles.summaryItem, { backgroundColor: AppColors.white }]}>
-        <Text style={styles.summaryItemLabel}>Desejado</Text>
-        <Text style={[styles.summaryItemValue, { color: AppColors.textPrimary }]}>
-          {formatCurrency(totalTarget)}
-        </Text>
-      </View>
-      <View style={[styles.summaryItem, { backgroundColor: AppColors.white }]}>
-        <Text style={styles.summaryItemLabel}>Acumulado</Text>
-        <Text style={[styles.summaryItemValue, { color: AppColors.income }]}>
-          {formatCurrency(totalCurrent)}
-        </Text>
-      </View>
-    </View>
-  );
-}
-
 // ─── Cartão de meta ──────────────────────────────────────────────────
 function GoalCard({
   goal,
@@ -61,49 +35,62 @@ function GoalCard({
   onDelete: () => void;
 }) {
   const progress = calculateGoalProgress(goal);
+  const iconName = goal.title.toLowerCase().includes('viagem')
+    ? 'airplane'
+    : goal.title.toLowerCase().includes('reserva')
+      ? 'wallet-outline'
+      : 'flag-outline';
+
   return (
     <Card style={styles.goalCard}>
-      <View style={styles.goalHeaderRow}>
+      <View style={styles.goalHero}>
+        <View style={styles.goalIconBubble}>
+          <Ionicons name={iconName} size={26} color={AppColors.primaryDark} />
+        </View>
         <View style={styles.goalTitleArea}>
-          <Text style={styles.goalTitle} numberOfLines={1}>
-            {goal.title}
-          </Text>
-          {goal.description ? (
-            <Text style={styles.goalDescription} numberOfLines={2}>
-              {goal.description}
-            </Text>
-          ) : null}
+          <Text style={styles.goalTitle} numberOfLines={1}>{goal.title}</Text>
+          {goal.description ? <Text style={styles.goalDescription} numberOfLines={1}>{goal.description}</Text> : null}
         </View>
-        <View style={styles.goalActions}>
-          <Pressable onPress={onEdit} hitSlop={8}>
-            <Ionicons name="create-outline" size={20} color={AppColors.textSecondary} />
-          </Pressable>
-          <Pressable onPress={onDelete} hitSlop={8}>
-            <Ionicons name="trash-outline" size={20} color={AppColors.expense} />
-          </Pressable>
+        <Pressable
+          onPress={() => Alert.alert(goal.title, undefined, [
+            { text: 'Editar', onPress: onEdit },
+            { text: 'Excluir', style: 'destructive', onPress: onDelete },
+            { text: 'Cancelar', style: 'cancel' },
+          ])}
+          hitSlop={10}
+          accessibilityLabel={`Ações para ${goal.title}`}>
+          <Ionicons name="ellipsis-vertical" size={20} color={AppColors.textPrimary} />
+        </Pressable>
+      </View>
+      <View style={styles.goalMetrics}>
+        <View style={styles.goalMetric}>
+          <Text style={styles.goalAmountText}>{formatCurrency(goal.targetAmount)}</Text>
+          <Text style={styles.goalMetricLabel}>Valor desejado</Text>
+        </View>
+        <View style={styles.goalMetricDivider} />
+        <View style={styles.goalMetric}>
+          <Text style={styles.goalAmountText}>{formatCurrency(goal.currentAmount)}</Text>
+          <Text style={styles.goalMetricLabel}>Acumulado</Text>
         </View>
       </View>
-      <View style={styles.goalAmounts}>
-        <Text style={styles.goalAmountText}>
-          {formatCurrency(goal.currentAmount)} de {formatCurrency(goal.targetAmount)}
-        </Text>
+      <View style={styles.goalProgressRow}>
+        <View style={styles.progressBar}>
+          <View
+            style={[
+              styles.progressFill,
+              {
+                width: `${Math.min(progress, 100)}%`,
+                backgroundColor: progress >= 100 ? '#38D9A9' : AppColors.primary,
+              },
+            ]}
+          />
+        </View>
         <Text style={styles.goalPct}>{formatPercentage(progress)}</Text>
-      </View>
-      <View style={styles.progressBar}>
-        <View
-          style={[
-            styles.progressFill,
-            {
-              width: `${Math.min(progress, 100)}%`,
-              backgroundColor: progress >= 100 ? '#38D9A9' : AppColors.primary,
-            },
-          ]}
-        />
       </View>
       {goal.deadline ? (
         <Text style={styles.goalDeadline}>
-          <Ionicons name="calendar-outline" size={12} color={AppColors.textSecondary} /> Prazo:{' '}
-          {formatDate(goal.deadline)}
+          <Ionicons name="calendar-outline" size={15} color={AppColors.primaryDark} />{' '}
+          Prazo: {formatDate(goal.deadline)}
         </Text>
       ) : null}
     </Card>
@@ -191,7 +178,11 @@ function GoalFormModal({
               <Text style={styles.modalTitle}>
                 {editingGoal ? 'Editar meta' : 'Nova meta'}
               </Text>
-              <Pressable onPress={onClose} hitSlop={12}>
+              <Pressable
+                onPress={onClose}
+                hitSlop={12}
+                accessibilityRole="button"
+                accessibilityLabel="Fechar edição da meta">
                 <Ionicons name="close" size={24} color={AppColors.textSecondary} />
               </Pressable>
             </View>
@@ -257,6 +248,8 @@ function GoalFormModal({
 // ─── Tela principal ──────────────────────────────────────────────────
 export default function MetasScreen() {
   const { goals, removeGoal } = useFinance();
+  const { goalId } = useLocalSearchParams<{ goalId?: string }>();
+  const routeGoal = goals.find((goal) => goal.id === goalId);
   const [modalVisible, setModalVisible] = useState(false);
   const [editingGoal, setEditingGoal] = useState<Goal | null>(null);
 
@@ -282,6 +275,7 @@ export default function MetasScreen() {
   const handleCloseModal = useCallback(() => {
     setModalVisible(false);
     setEditingGoal(null);
+    router.setParams({ goalId: undefined });
   }, []);
 
   const handleOpenNew = useCallback(() => {
@@ -292,10 +286,16 @@ export default function MetasScreen() {
   return (
     <SafeAreaView edges={['top', 'left', 'right']} style={styles.safeArea}>
       <View style={styles.headerPadding}>
+        <View style={styles.brandBar}>
+          <View style={styles.brandLockup}>
+            <Ionicons name="wallet" size={28} color={AppColors.primaryDark} />
+            <Text style={styles.brandName}>FinAlly</Text>
+          </View>
+          <Pressable onPress={() => Alert.alert('Notificações', 'Você está em dia!')} hitSlop={8}>
+            <Ionicons name="notifications-outline" size={23} color={AppColors.primaryDark} />
+          </Pressable>
+        </View>
         <Header title="Minhas Metas" subtitle="Transforme seus planos em conquistas." />
-      </View>
-      <View style={styles.summaryPadding}>
-        <GoalsSummary />
       </View>
 
       <FlatList
@@ -310,17 +310,25 @@ export default function MetasScreen() {
         style={styles.list}
       />
 
-      {/* Botão Nova Meta */}
-      <Pressable style={styles.fab} onPress={handleOpenNew}>
-        <Ionicons name="add" size={22} color={AppColors.white} />
-        <Text style={styles.fabText}>Nova Meta</Text>
-      </Pressable>
+      <View style={styles.footer}>
+        <Pressable style={styles.newGoalButton} onPress={handleOpenNew}>
+          <Ionicons name="add" size={21} color={AppColors.white} />
+          <Text style={styles.newGoalText}>Nova Meta</Text>
+        </Pressable>
+        <View style={styles.tipBox}>
+          <Ionicons name="bulb-outline" size={27} color={AppColors.primaryDark} />
+          <View style={styles.tipCopy}>
+            <Text style={styles.tipTitle}>Dica do FinAlly</Text>
+            <Text style={styles.tipText}>Pequenas economias hoje, grandes conquistas amanhã!</Text>
+          </View>
+        </View>
+      </View>
 
-      {modalVisible && (
+      {(modalVisible || routeGoal) && (
         <GoalFormModal
-          visible={modalVisible}
+          visible={modalVisible || Boolean(routeGoal)}
           onClose={handleCloseModal}
-          editingGoal={editingGoal}
+          editingGoal={routeGoal ?? editingGoal}
         />
       )}
     </SafeAreaView>
@@ -335,6 +343,22 @@ const styles = StyleSheet.create({
   },
   headerPadding: {
     paddingHorizontal: AppSpacing.md,
+  },
+  brandBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: AppSpacing.xs,
+  },
+  brandLockup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: AppSpacing.xs,
+  },
+  brandName: {
+    fontSize: AppFontSize.lg,
+    fontWeight: '800',
+    color: AppColors.primaryDark,
   },
   summaryPadding: {
     paddingHorizontal: AppSpacing.md,
@@ -369,18 +393,33 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingHorizontal: AppSpacing.md,
-    paddingBottom: BottomNavigationHeight + 80,
+    paddingBottom: AppSpacing.sm,
     gap: AppSpacing.sm,
   },
 
   /* Goal card */
   goalCard: {
-    gap: AppSpacing.sm,
+    padding: 0,
+    gap: 0,
+    overflow: 'hidden',
+    borderRadius: AppRadius.md,
   },
-  goalHeaderRow: {
+  goalHero: {
+    minHeight: 68,
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    alignItems: 'center',
     gap: AppSpacing.sm,
+    paddingHorizontal: AppSpacing.sm,
+    paddingVertical: AppSpacing.sm,
+    backgroundColor: AppColors.primaryDark,
+  },
+  goalIconBubble: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#BDEBDD',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   goalTitleArea: {
     flex: 1,
@@ -389,26 +428,42 @@ const styles = StyleSheet.create({
   goalTitle: {
     fontSize: AppFontSize.lg,
     fontWeight: '700',
-    color: AppColors.textPrimary,
+    color: AppColors.white,
   },
   goalDescription: {
     fontSize: AppFontSize.sm,
-    color: AppColors.textSecondary,
-    lineHeight: 18,
+    color: '#D5F0E4',
+    lineHeight: 16,
   },
   goalActions: {
     flexDirection: 'row',
     gap: AppSpacing.sm,
     alignItems: 'flex-start',
   },
-  goalAmounts: {
+  goalMetrics: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    paddingHorizontal: AppSpacing.md,
+    paddingTop: AppSpacing.sm,
+  },
+  goalMetric: {
+    flex: 1,
+    gap: 2,
+  },
+  goalMetricDivider: {
+    width: 1,
+    height: 36,
+    backgroundColor: AppColors.border,
+    marginHorizontal: AppSpacing.sm,
+  },
+  goalMetricLabel: {
+    fontSize: AppFontSize.sm - 1,
+    color: AppColors.textSecondary,
   },
   goalAmountText: {
-    fontSize: AppFontSize.sm,
-    color: AppColors.textSecondary,
+    fontSize: AppFontSize.md,
+    color: AppColors.textPrimary,
+    fontWeight: '700',
   },
   goalPct: {
     fontSize: AppFontSize.sm,
@@ -416,42 +471,70 @@ const styles = StyleSheet.create({
     color: AppColors.primary,
   },
   progressBar: {
-    height: 10,
+    flex: 1,
+    height: 9,
     backgroundColor: AppColors.primaryLight,
     borderRadius: AppRadius.full,
     overflow: 'hidden',
   },
   progressFill: {
-    height: 10,
+    height: 9,
     borderRadius: AppRadius.full,
+  },
+  goalProgressRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: AppSpacing.sm,
+    paddingHorizontal: AppSpacing.md,
+    paddingTop: AppSpacing.sm,
   },
   goalDeadline: {
     fontSize: AppFontSize.sm - 1,
-    color: AppColors.textSecondary,
+    color: AppColors.textPrimary,
+    paddingHorizontal: AppSpacing.md,
+    paddingTop: AppSpacing.xs,
+    paddingBottom: AppSpacing.sm,
   },
 
-  /* FAB */
-  fab: {
-    position: 'absolute',
-    right: AppSpacing.md,
-    bottom: AppSpacing.md,
+  footer: {
+    gap: AppSpacing.sm,
+    paddingHorizontal: AppSpacing.md,
+    paddingTop: AppSpacing.sm,
+    paddingBottom: AppSpacing.sm,
+  },
+  newGoalButton: {
+    minHeight: 46,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: AppSpacing.xs,
-    backgroundColor: AppColors.primary,
-    paddingVertical: AppSpacing.sm + 4,
-    paddingHorizontal: AppSpacing.md,
+    backgroundColor: AppColors.primaryDark,
     borderRadius: AppRadius.full,
-    elevation: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.25,
-    shadowRadius: 5,
   },
-  fabText: {
+  newGoalText: {
     fontSize: AppFontSize.md,
-    fontWeight: '700',
     color: AppColors.white,
+    fontWeight: '700',
+  },
+  tipBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: AppSpacing.sm,
+    backgroundColor: '#E1F2EC',
+    minHeight: 58,
+    paddingVertical: AppSpacing.sm,
+    paddingHorizontal: AppSpacing.md,
+    borderRadius: AppRadius.md,
+  },
+  tipCopy: { flex: 1 },
+  tipTitle: {
+    fontSize: AppFontSize.sm,
+    color: AppColors.primaryDark,
+    fontWeight: '700',
+  },
+  tipText: {
+    fontSize: AppFontSize.sm - 1,
+    color: AppColors.textPrimary,
   },
 
   /* Modal */

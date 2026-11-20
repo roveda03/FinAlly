@@ -1,9 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Card } from '@/components/cards';
-import { Button, Container, Header } from '@/components/common';
+import { Container, Header } from '@/components/common';
 import { AppColors, AppFontSize, AppRadius, AppSpacing } from '@/constants';
 import { useAuth } from '@/hooks/use-auth';
 import { useFinance } from '@/hooks/use-finance';
@@ -13,31 +13,48 @@ import { calculateGoalProgress, formatCurrency, formatDate, formatPercentage } f
 function SummaryCards() {
   const { summary } = useFinance();
   return (
-    <View style={styles.summaryRow}>
-      <Card variant="highlight" style={styles.summaryCard}>
-        <Text style={styles.summaryLabel}>Saldo total</Text>
+    <View style={styles.summaryStack}>
+      <Card variant="highlight" style={styles.balanceCard}>
+        <View style={styles.balanceHeading}>
+          <Ionicons name="wallet" size={30} color={AppColors.white} />
+          <View style={styles.balanceDivider} />
+          <Text style={styles.summaryLabel}>Saldo Atual</Text>
+          <Ionicons name="trending-up" size={20} color={AppColors.white} />
+        </View>
         <Text style={styles.summaryValueWhite}>{formatCurrency(summary.balance)}</Text>
       </Card>
-      <View style={styles.summarySmallColumn}>
-        <Card style={styles.summarySmallCard}>
-          <Text style={styles.summarySmallLabel}>Receitas</Text>
-          <Text style={[styles.summarySmallValue, { color: AppColors.income }]}>
-            {formatCurrency(summary.totalIncome)}
-          </Text>
-        </Card>
-        <Card style={styles.summarySmallCard}>
-          <Text style={styles.summarySmallLabel}>Despesas</Text>
-          <Text style={[styles.summarySmallValue, { color: AppColors.expense }]}>
-            {formatCurrency(summary.totalExpense)}
-          </Text>
-        </Card>
+      <View style={styles.summaryRow}>
+        <View style={[styles.summaryTile, styles.incomeTile]}>
+          <View style={[styles.summaryTileIcon, { backgroundColor: '#BDEBDD' }]}>
+            <Ionicons name="arrow-down" size={18} color={AppColors.income} />
+          </View>
+          <View style={styles.summaryTileCopy}>
+            <Text style={styles.summarySmallLabel}>Receitas</Text>
+            <Text style={[styles.summarySmallValue, { color: AppColors.textPrimary }]}>
+              {formatCurrency(summary.totalIncome)}
+            </Text>
+            <Text style={[styles.summaryChange, { color: AppColors.income }]}>↑ +12%</Text>
+          </View>
+        </View>
+        <View style={[styles.summaryTile, styles.expenseTile]}>
+          <View style={[styles.summaryTileIcon, { backgroundColor: '#FFD8DA' }]}>
+            <Ionicons name="arrow-up" size={18} color={AppColors.expense} />
+          </View>
+          <View style={styles.summaryTileCopy}>
+            <Text style={styles.summarySmallLabel}>Despesas</Text>
+            <Text style={[styles.summarySmallValue, { color: AppColors.textPrimary }]}>
+              {formatCurrency(summary.totalExpense)}
+            </Text>
+            <Text style={[styles.summaryChange, { color: AppColors.expense }]}>↑ +8%</Text>
+          </View>
+        </View>
       </View>
     </View>
   );
 }
 
 // ─── Gráfico de despesas por categoria ───────────────────────────────
-const CHART_COLORS = ['#087F5B', '#0CA678', '#38D9A9', '#63E6BE', '#96F2D7', '#C3FAE8'];
+const CHART_COLORS = ['#087F5B', '#84BD5B', '#F6A12A', '#4E7CF6', '#9B3FC7', '#C3FAE8'];
 
 function ExpenseByCategoryChart() {
   const { expenses, getCategoryById } = useFinance();
@@ -59,27 +76,37 @@ function ExpenseByCategoryChart() {
 
   return (
     <Card title="Despesas por categoria">
-      {/* Simple horizontal bars */}
       <View style={styles.chartContainer}>
-        {sorted.map((cat, i) => {
-          const pct = (cat.total / totalExpense) * 100;
-          const color = CHART_COLORS[i % CHART_COLORS.length];
-          return (
-            <View key={cat.name} style={styles.chartRow}>
-              <View style={styles.chartLabelRow}>
+        <View style={styles.donut}>
+          {CHART_COLORS.slice(0, 4).map((color, index) => (
+            <View
+              key={color}
+              style={[
+                styles.donutSegment,
+                index === 0 && { borderTopColor: color },
+                index === 1 && { borderRightColor: color },
+                index === 2 && { borderBottomColor: color },
+                index === 3 && { borderLeftColor: color },
+              ]}
+            />
+          ))}
+          <View style={styles.donutCenter}>
+            <Text style={styles.donutAmount}>{formatCurrency(totalExpense)}</Text>
+          </View>
+        </View>
+        <View style={styles.chartLegend}>
+          {sorted.slice(0, 5).map((cat, index) => {
+            const pct = (cat.total / totalExpense) * 100;
+            const color = CHART_COLORS[index % CHART_COLORS.length];
+            return (
+              <View key={cat.name} style={styles.legendRow}>
                 <View style={[styles.chartDot, { backgroundColor: color }]} />
-                <Text style={styles.chartCategoryName} numberOfLines={1}>
-                  {cat.name}
-                </Text>
+                <Text style={styles.chartCategoryName} numberOfLines={1}>{cat.name}</Text>
                 <Text style={styles.chartPct}>{formatPercentage(pct)}</Text>
               </View>
-              <View style={styles.barBackground}>
-                <View style={[styles.barFill, { width: `${pct}%`, backgroundColor: color }]} />
-              </View>
-              <Text style={styles.chartValue}>{formatCurrency(cat.total)}</Text>
-            </View>
-          );
-        })}
+            );
+          })}
+        </View>
       </View>
     </Card>
   );
@@ -131,11 +158,10 @@ function RecentTransactions() {
               </View>
             );
           })}
-          <Button
-            title="Ver todas"
-            variant="secondary"
-            onPress={() => router.navigate('/movimentacoes')}
-          />
+          <Pressable style={styles.seeAllButton} onPress={() => router.navigate('/movimentacoes')}>
+            <Text style={styles.seeAllText}>Ver todas</Text>
+            <Ionicons name="arrow-forward" size={15} color={AppColors.primary} />
+          </Pressable>
         </>
       )}
     </Card>
@@ -159,18 +185,30 @@ function FeaturedGoal() {
   const progress = calculateGoalProgress(goal);
 
   return (
-    <Card title="Meta em destaque">
-      <Text style={styles.goalTitle}>{goal.title}</Text>
-      <View style={styles.goalAmounts}>
-        <Text style={styles.goalAmountLabel}>
-          {formatCurrency(goal.currentAmount)} de {formatCurrency(goal.targetAmount)}
-        </Text>
-        <Text style={styles.goalPct}>{formatPercentage(progress)}</Text>
-      </View>
-      <View style={styles.progressBar}>
-        <View style={[styles.progressFill, { width: `${Math.min(progress, 100)}%` }]} />
-      </View>
-    </Card>
+    <Pressable
+      onPress={() => router.navigate({ pathname: '/metas', params: { goalId: goal.id } })}
+      accessibilityRole="button"
+      accessibilityLabel={`Editar meta ${goal.title}`}>
+      <Card style={styles.featuredGoal}>
+        <View style={styles.goalHeading}>
+          <Ionicons name="flag" size={22} color={AppColors.white} />
+          <View style={styles.goalHeadingCopy}>
+            <Text style={styles.featuredLabel}>Sua próxima meta</Text>
+            <Text style={styles.featuredTitle} numberOfLines={1}>{goal.title}</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={AppColors.white} />
+        </View>
+        <View style={styles.goalAmounts}>
+          <Text style={styles.goalAmountLabel}>
+            {formatCurrency(goal.currentAmount)} de {formatCurrency(goal.targetAmount)}
+          </Text>
+          <Text style={styles.goalPct}>{formatPercentage(progress)}</Text>
+        </View>
+        <View style={styles.progressBar}>
+          <View style={[styles.progressFill, { width: `${Math.min(progress, 100)}%` }]} />
+        </View>
+      </Card>
+    </Pressable>
   );
 }
 
@@ -180,18 +218,24 @@ export default function DashboardScreen() {
 
   return (
     <Container scrollable>
+      <View style={styles.brandBar}>
+        <View style={styles.brandLockup}>
+          <Ionicons name="wallet" size={26} color={AppColors.primary} />
+          <Text style={styles.brandName}>FinAlly</Text>
+        </View>
+        <Pressable onPress={() => Alert.alert('Notificações', 'Você está em dia!')} hitSlop={8}>
+          <Ionicons name="notifications-outline" size={23} color={AppColors.primaryDark} />
+        </Pressable>
+      </View>
       <Header
-        title={`Olá, ${user?.name ?? 'Usuário'}!`}
-        subtitle="Veja como estão suas finanças hoje."
+        title={`Olá, ${user?.name?.split(' ')[0] ?? 'Usuário'}!`}
+        subtitle="Aqui está um resumo das suas finanças:"
         right={
-          <View style={styles.headerRight}>
+          <Pressable onPress={logout} disabled={isLoading} hitSlop={8} accessibilityLabel="Sair">
             <View style={styles.avatar}>
-              <Ionicons name="person" size={20} color={AppColors.white} />
+              <Text style={styles.avatarInitials}>{user?.name?.slice(0, 2).toUpperCase() ?? 'JV'}</Text>
             </View>
-            <Pressable onPress={logout} disabled={isLoading} hitSlop={8}>
-              <Ionicons name="log-out-outline" size={24} color={AppColors.textSecondary} />
-            </Pressable>
-          </View>
+          </Pressable>
         }
       />
       <SummaryCards />
@@ -204,6 +248,22 @@ export default function DashboardScreen() {
 
 // ─── Estilos ─────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
+  brandBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: AppSpacing.xs,
+  },
+  brandLockup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: AppSpacing.xs,
+  },
+  brandName: {
+    fontSize: AppFontSize.lg,
+    fontWeight: '800',
+    color: AppColors.primaryDark,
+  },
   /* Header */
   headerRight: {
     flexDirection: 'row',
@@ -218,16 +278,57 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  avatarInitials: {
+    color: AppColors.white,
+    fontSize: AppFontSize.sm,
+    fontWeight: '700',
+  },
 
   /* Summary */
+  summaryStack: {
+    gap: AppSpacing.sm,
+  },
+  balanceCard: {
+    minHeight: 82,
+    paddingVertical: AppSpacing.sm,
+    paddingHorizontal: AppSpacing.md,
+    borderRadius: AppRadius.md,
+    gap: 2,
+  },
+  balanceHeading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: AppSpacing.sm,
+  },
+  balanceDivider: {
+    width: 1,
+    height: 32,
+    backgroundColor: 'rgba(255,255,255,0.65)',
+  },
   summaryRow: {
     flexDirection: 'row',
     gap: AppSpacing.sm,
   },
-  summaryCard: {
+  summaryTile: {
     flex: 1,
+    minHeight: 62,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: AppSpacing.sm,
+    paddingVertical: AppSpacing.xs,
+    gap: AppSpacing.xs,
+    borderRadius: AppRadius.md,
+  },
+  incomeTile: { backgroundColor: '#E4F5EE' },
+  expenseTile: { backgroundColor: '#FCE9E9' },
+  summaryTileIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
     justifyContent: 'center',
   },
+  summaryTileCopy: { flex: 1 },
   summaryLabel: {
     fontSize: AppFontSize.sm,
     color: AppColors.primaryLight,
@@ -251,18 +352,54 @@ const styles = StyleSheet.create({
     color: AppColors.textSecondary,
   },
   summarySmallValue: {
-    fontSize: AppFontSize.lg,
+    fontSize: AppFontSize.md,
     fontWeight: '700',
+  },
+  summaryChange: {
+    fontSize: AppFontSize.sm - 2,
+    fontWeight: '600',
   },
 
   /* Chart */
   chartContainer: {
-    gap: AppSpacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: AppSpacing.md,
+    minHeight: 108,
   },
-  chartRow: {
-    gap: 4,
+  donut: {
+    width: 104,
+    height: 104,
+    borderRadius: 52,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  chartLabelRow: {
+  donutSegment: {
+    position: 'absolute',
+    width: 104,
+    height: 104,
+    borderRadius: 52,
+    borderWidth: 14,
+    borderColor: 'transparent',
+  },
+  donutCenter: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: AppColors.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  donutAmount: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: AppColors.textPrimary,
+  },
+  chartLegend: {
+    flex: 1,
+    gap: AppSpacing.xs,
+  },
+  legendRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: AppSpacing.xs,
@@ -282,19 +419,17 @@ const styles = StyleSheet.create({
     color: AppColors.textSecondary,
     fontWeight: '600',
   },
-  barBackground: {
-    height: 8,
-    backgroundColor: AppColors.primaryLight,
-    borderRadius: AppRadius.full,
-    overflow: 'hidden',
+  seeAllButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: AppSpacing.xs,
+    paddingTop: AppSpacing.xs,
   },
-  barFill: {
-    height: 8,
-    borderRadius: AppRadius.full,
-  },
-  chartValue: {
+  seeAllText: {
+    color: AppColors.primary,
     fontSize: AppFontSize.sm - 1,
-    color: AppColors.textSecondary,
+    fontWeight: '600',
   },
 
   /* Transactions */
@@ -335,6 +470,28 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: AppColors.textPrimary,
   },
+  featuredGoal: {
+    backgroundColor: AppColors.primary,
+    borderColor: AppColors.primary,
+    borderRadius: AppRadius.md,
+    paddingVertical: AppSpacing.sm,
+    gap: AppSpacing.xs,
+  },
+  goalHeading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: AppSpacing.sm,
+  },
+  goalHeadingCopy: { flex: 1 },
+  featuredLabel: {
+    fontSize: AppFontSize.sm - 2,
+    color: '#D5F0E4',
+  },
+  featuredTitle: {
+    fontSize: AppFontSize.sm,
+    color: AppColors.white,
+    fontWeight: '700',
+  },
   goalAmounts: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -342,22 +499,22 @@ const styles = StyleSheet.create({
   },
   goalAmountLabel: {
     fontSize: AppFontSize.sm,
-    color: AppColors.textSecondary,
+    color: '#D5F0E4',
   },
   goalPct: {
     fontSize: AppFontSize.sm,
     fontWeight: '700',
-    color: AppColors.primary,
+    color: AppColors.white,
   },
   progressBar: {
     height: 10,
-    backgroundColor: AppColors.primaryLight,
+    backgroundColor: 'rgba(255,255,255,0.4)',
     borderRadius: AppRadius.full,
     overflow: 'hidden',
   },
   progressFill: {
     height: 10,
-    backgroundColor: AppColors.primary,
+    backgroundColor: AppColors.white,
     borderRadius: AppRadius.full,
   },
 

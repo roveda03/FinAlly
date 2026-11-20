@@ -1,16 +1,16 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useCallback, useMemo, useState } from 'react';
 import {
-  Alert,
-  FlatList,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
+    Alert,
+    FlatList,
+    KeyboardAvoidingView,
+    Modal,
+    Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    View,
 } from 'react-native';
 
 import { Button, Container, Header } from '@/components/common';
@@ -325,10 +325,202 @@ function TransactionFormModal({
   );
 }
 
+function TransactionEntryScreen({ onClose }: { onClose: () => void }) {
+  const { addTransaction, categories } = useFinance();
+  const [form, setForm] = useState<FormData>({
+    ...INITIAL_FORM,
+    type: 'income',
+    date: new Date().toLocaleDateString('pt-BR'),
+  });
+  const [errors, setErrors] = useState<Partial<Record<'amount' | 'categoryId' | 'date', string>>>({});
+  const [categoryExpanded, setCategoryExpanded] = useState(false);
+  const availableCategories = categories.filter((category) => category.type === form.type);
+  const selectedCategory = availableCategories.find((category) => category.id === form.categoryId);
+
+  function handleSave() {
+    const amount = parseFloat(form.amount.replace(/\./g, '').replace(',', '.'));
+    const dateParts = form.date.split('/');
+    const validDate = dateParts.length === 3 && dateParts[2].length === 4;
+    const nextErrors: Partial<Record<'amount' | 'categoryId' | 'date', string>> = {};
+    if (!form.amount.trim() || Number.isNaN(amount) || amount <= 0)
+      nextErrors.amount = 'Informe um valor válido.';
+    if (!form.categoryId) nextErrors.categoryId = 'Selecione uma categoria.';
+    if (!validDate) nextErrors.date = 'Use o formato DD/MM/AAAA.';
+    setErrors(nextErrors);
+    if (Object.keys(nextErrors).length > 0) return;
+
+    const [day, month, year] = dateParts;
+    addTransaction({
+      type: form.type,
+      description: form.description.trim() || (form.type === 'income' ? 'Receita' : 'Despesa'),
+      amount,
+      categoryId: form.categoryId,
+      date: `${year}-${month}-${day}`,
+    });
+    onClose();
+  }
+
+  function changeType(type: TransactionType) {
+    setForm((current) => ({ ...current, type, categoryId: '' }));
+    setErrors((current) => ({ ...current, categoryId: undefined }));
+  }
+
+  return (
+    <Container scrollable contentStyle={styles.entryContent}>
+      <View style={styles.entryHeader}>
+        <Pressable onPress={onClose} hitSlop={10} accessibilityLabel="Voltar">
+          <Ionicons name="arrow-back" size={25} color={AppColors.primaryDark} />
+        </Pressable>
+        <Text style={styles.entryHeaderTitle}>Nova Movimentação</Text>
+        <View style={styles.entryBrand}>
+          <Ionicons name="wallet" size={21} color={AppColors.primary} />
+          <Text style={styles.entryBrandText}>FinAlly</Text>
+        </View>
+      </View>
+
+      <View style={styles.entryTypeToggle}>
+        <Pressable
+          style={[styles.entryTypeButton, form.type === 'income' && styles.entryTypeActive]}
+          onPress={() => changeType('income')}>
+          <Ionicons
+            name="arrow-up-circle"
+            size={22}
+            color={form.type === 'income' ? AppColors.white : AppColors.primaryDark}
+          />
+          <Text style={[styles.entryTypeText, form.type === 'income' && styles.entryTypeTextActive]}>
+            Receita
+          </Text>
+        </Pressable>
+        <Pressable
+          style={[styles.entryTypeButton, form.type === 'expense' && styles.entryTypeExpenseActive]}
+          onPress={() => changeType('expense')}>
+          <Ionicons
+            name="arrow-down-circle"
+            size={22}
+            color={form.type === 'expense' ? AppColors.white : AppColors.primaryDark}
+          />
+          <Text style={[styles.entryTypeText, form.type === 'expense' && styles.entryTypeTextActive]}>
+            Despesa
+          </Text>
+        </Pressable>
+      </View>
+
+      <View style={styles.entryInfoPanel}>
+        <Ionicons
+          name={form.type === 'income' ? 'wallet' : 'wallet-outline'}
+          size={48}
+          color={AppColors.primary}
+        />
+        <View style={styles.entryInfoCopy}>
+          <Text style={styles.entryInfoTitle}>
+            {form.type === 'income' ? 'Registrar uma receita' : 'Registrar uma despesa'}
+          </Text>
+          <Text style={styles.entryInfoText}>
+            {form.type === 'income'
+              ? 'Adicione seus ganhos de forma rápida e organizada.'
+              : 'Registre seus gastos para acompanhar suas finanças.'}
+          </Text>
+        </View>
+      </View>
+
+      <View style={styles.entryFieldBlock}>
+        <View style={styles.entryLabelRow}>
+          <Ionicons name="cash" size={19} color={AppColors.primaryDark} />
+          <Text style={styles.entryLabel}>Valor</Text>
+        </View>
+        <Input
+          placeholder="Ex: R$ 1.000,00"
+          value={form.amount}
+          onChangeText={(amount) => {
+            setForm((current) => ({ ...current, amount }));
+            if (errors.amount) setErrors((current) => ({ ...current, amount: undefined }));
+          }}
+          error={errors.amount}
+          keyboardType="decimal-pad"
+          style={styles.entryInput}
+        />
+      </View>
+
+      <View style={styles.entryFieldBlock}>
+        <View style={styles.entryLabelRow}>
+          <Ionicons name="pricetag" size={19} color={AppColors.primaryDark} />
+          <Text style={styles.entryLabel}>Categoria</Text>
+        </View>
+        <Pressable style={styles.categorySelect} onPress={() => setCategoryExpanded((open) => !open)}>
+          <Ionicons name="briefcase" size={18} color={AppColors.primaryDark} />
+          <Text style={styles.categorySelectText}>{selectedCategory?.name ?? 'Selecionar categoria'}</Text>
+          <Ionicons name={categoryExpanded ? 'chevron-up' : 'chevron-down'} size={18} color={AppColors.textPrimary} />
+        </Pressable>
+        {categoryExpanded ? (
+          <View style={styles.categoryOptions}>
+            {availableCategories.map((category) => (
+              <Pressable
+                key={category.id}
+                style={styles.categoryOption}
+                onPress={() => {
+                  setForm((current) => ({ ...current, categoryId: category.id }));
+                  setCategoryExpanded(false);
+                  setErrors((current) => ({ ...current, categoryId: undefined }));
+                }}>
+                <Text style={styles.categoryOptionText}>{category.name}</Text>
+                {category.id === form.categoryId ? (
+                  <Ionicons name="checkmark" size={18} color={AppColors.primary} />
+                ) : null}
+              </Pressable>
+            ))}
+          </View>
+        ) : null}
+        {errors.categoryId ? <Text style={styles.entryError}>{errors.categoryId}</Text> : null}
+      </View>
+
+      <View style={styles.entryFieldBlock}>
+        <View style={styles.entryLabelRow}>
+          <Ionicons name="calendar" size={19} color={AppColors.primaryDark} />
+          <Text style={styles.entryLabel}>Data</Text>
+        </View>
+        <View style={styles.entryDateRow}>
+          <View style={styles.entryDateInput}>
+            <Input
+              placeholder="DD/MM/AAAA"
+              value={form.date}
+              onChangeText={(date) => {
+                setForm((current) => ({ ...current, date }));
+                if (errors.date) setErrors((current) => ({ ...current, date: undefined }));
+              }}
+              error={errors.date}
+              style={styles.entryInput}
+            />
+          </View>
+          <Ionicons name="calendar-outline" size={20} color={AppColors.primaryDark} />
+        </View>
+      </View>
+
+      <View style={styles.entryFieldBlock}>
+        <View style={styles.entryLabelRow}>
+          <Ionicons name="reader" size={19} color={AppColors.primaryDark} />
+          <Text style={styles.entryLabel}>Descrição (opcional)</Text>
+        </View>
+        <Input
+          placeholder="Ex: Pagamento do trabalho"
+          value={form.description}
+          onChangeText={(description) => setForm((current) => ({ ...current, description }))}
+          style={styles.entryInput}
+        />
+      </View>
+
+      <Pressable style={styles.saveEntryButton} onPress={handleSave}>
+        <Ionicons name="save" size={19} color={AppColors.white} />
+        <Text style={styles.saveEntryText}>Salvar Movimentação</Text>
+      </Pressable>
+    </Container>
+  );
+}
+
 // ─── Tela principal ──────────────────────────────────────────────────
 export default function MovimentacoesScreen() {
   const { transactions, getCategoryById, removeTransaction } = useFinance();
   const [filter, setFilter] = useState<FilterType>('all');
+  const [entryVisible, setEntryVisible] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
 
@@ -363,8 +555,12 @@ export default function MovimentacoesScreen() {
 
   const handleOpenNew = useCallback(() => {
     setEditingTransaction(null);
-    setModalVisible(true);
+    setEntryVisible(true);
   }, []);
+
+  if (entryVisible) {
+    return <TransactionEntryScreen onClose={() => setEntryVisible(false)} />;
+  }
 
   return (
     <Container>
@@ -392,7 +588,11 @@ export default function MovimentacoesScreen() {
       />
 
       {/* FAB */}
-      <Pressable style={styles.fab} onPress={handleOpenNew}>
+      <Pressable
+        style={styles.fab}
+        onPress={handleOpenNew}
+        accessibilityRole="button"
+        accessibilityLabel="Nova movimentação">
         <Ionicons name="add" size={28} color={AppColors.white} />
       </Pressable>
 
@@ -409,6 +609,161 @@ export default function MovimentacoesScreen() {
 
 // ─── Estilos ─────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
+  entryContent: {
+    gap: AppSpacing.md,
+    paddingTop: AppSpacing.xs,
+    paddingBottom: AppSpacing.lg,
+  },
+  entryHeader: {
+    minHeight: 40,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: AppSpacing.xs,
+  },
+  entryHeaderTitle: {
+    flex: 1,
+    textAlign: 'center',
+    fontSize: AppFontSize.md,
+    fontWeight: '700',
+    color: AppColors.textPrimary,
+  },
+  entryBrand: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  entryBrandText: {
+    fontSize: AppFontSize.sm,
+    fontWeight: '800',
+    color: AppColors.primary,
+  },
+  entryTypeToggle: {
+    minHeight: 44,
+    flexDirection: 'row',
+    backgroundColor: '#DDF3EA',
+    borderRadius: AppRadius.full,
+    padding: 3,
+  },
+  entryTypeButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: AppSpacing.xs,
+    borderRadius: AppRadius.full,
+  },
+  entryTypeActive: {
+    backgroundColor: AppColors.primaryDark,
+  },
+  entryTypeExpenseActive: {
+    backgroundColor: '#B63845',
+  },
+  entryTypeText: {
+    color: AppColors.primaryDark,
+    fontSize: AppFontSize.md,
+    fontWeight: '600',
+  },
+  entryTypeTextActive: {
+    color: AppColors.white,
+  },
+  entryInfoPanel: {
+    minHeight: 86,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: AppSpacing.md,
+    padding: AppSpacing.md,
+    borderRadius: AppRadius.md,
+    backgroundColor: '#D6F3E9',
+  },
+  entryInfoCopy: { flex: 1, gap: AppSpacing.xs },
+  entryInfoTitle: {
+    fontSize: AppFontSize.md,
+    fontWeight: '700',
+    color: AppColors.textPrimary,
+  },
+  entryInfoText: {
+    fontSize: AppFontSize.sm,
+    lineHeight: 18,
+    color: AppColors.textPrimary,
+  },
+  entryFieldBlock: { gap: AppSpacing.xs },
+  entryLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: AppSpacing.xs,
+  },
+  entryLabel: {
+    fontSize: AppFontSize.md,
+    fontWeight: '700',
+    color: AppColors.textPrimary,
+  },
+  entryInput: {
+    minHeight: 48,
+    borderRadius: 13,
+    borderColor: '#D6DEE1',
+    backgroundColor: 'rgba(255,255,255,0.84)',
+  },
+  categorySelect: {
+    minHeight: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: AppSpacing.sm,
+    paddingHorizontal: AppSpacing.md,
+    borderWidth: 1,
+    borderColor: '#D6DEE1',
+    borderRadius: 13,
+    backgroundColor: 'rgba(255,255,255,0.84)',
+  },
+  categorySelectText: {
+    flex: 1,
+    color: AppColors.textPrimary,
+    fontSize: AppFontSize.md,
+  },
+  categoryOptions: {
+    borderWidth: 1,
+    borderColor: AppColors.border,
+    borderRadius: AppRadius.md,
+    overflow: 'hidden',
+    backgroundColor: AppColors.white,
+  },
+  categoryOption: {
+    minHeight: 42,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: AppSpacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: AppColors.border,
+  },
+  categoryOptionText: {
+    color: AppColors.textPrimary,
+    fontSize: AppFontSize.sm,
+  },
+  entryError: {
+    color: AppColors.expense,
+    fontSize: AppFontSize.sm,
+  },
+  entryDateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: AppSpacing.sm,
+  },
+  entryDateInput: { flex: 1 },
+  saveEntryButton: {
+    minHeight: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: AppSpacing.sm,
+    borderRadius: AppRadius.full,
+    backgroundColor: AppColors.primary,
+  },
+  saveEntryText: {
+    color: AppColors.white,
+    fontSize: AppFontSize.md,
+    fontWeight: '700',
+  },
   /* Summary */
   summaryRow: {
     flexDirection: 'row',
