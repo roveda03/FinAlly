@@ -15,8 +15,9 @@ import {
 } from 'react-native';
 
 import { Card } from '@/components/cards';
-import { Button, Header } from '@/components/common';
+import { AppTopBar, Button, Header } from '@/components/common';
 import { Input } from '@/components/forms';
+import { GoalsAndLimitsTabs, SegmentedTabs } from '@/components/navigation';
 import { AppColors, AppFontSize, AppRadius, AppSpacing } from '@/constants';
 import { useFinance } from '@/hooks/use-finance';
 import type { Goal } from '@/types';
@@ -248,8 +249,9 @@ function GoalFormModal({
 // ─── Tela principal ──────────────────────────────────────────────────
 export default function MetasScreen() {
   const { goals, removeGoal } = useFinance();
-  const { goalId } = useLocalSearchParams<{ goalId?: string }>();
+  const { goalId, novaMeta } = useLocalSearchParams<{ goalId?: string; novaMeta?: string }>();
   const routeGoal = goals.find((goal) => goal.id === goalId);
+  const routeNewGoal = novaMeta === '1';
   const [modalVisible, setModalVisible] = useState(false);
   const [editingGoal, setEditingGoal] = useState<Goal | null>(null);
 
@@ -275,7 +277,7 @@ export default function MetasScreen() {
   const handleCloseModal = useCallback(() => {
     setModalVisible(false);
     setEditingGoal(null);
-    router.setParams({ goalId: undefined });
+    router.setParams({ goalId: undefined, novaMeta: undefined });
   }, []);
 
   const handleOpenNew = useCallback(() => {
@@ -286,16 +288,9 @@ export default function MetasScreen() {
   return (
     <SafeAreaView edges={['top', 'left', 'right']} style={styles.safeArea}>
       <View style={styles.headerPadding}>
-        <View style={styles.brandBar}>
-          <View style={styles.brandLockup}>
-            <Ionicons name="wallet" size={28} color={AppColors.primaryDark} />
-            <Text style={styles.brandName}>FinAlly</Text>
-          </View>
-          <Pressable onPress={() => Alert.alert('Notificações', 'Você está em dia!')} hitSlop={8}>
-            <Ionicons name="notifications-outline" size={23} color={AppColors.primaryDark} />
-          </Pressable>
-        </View>
-        <Header title="Minhas Metas" subtitle="Transforme seus planos em conquistas." />
+        <AppTopBar />
+        <Header title="Minhas Metas" subtitle="Defina objetivos e acompanhe seu progresso!" />
+        <SegmentedTabs tabs={GoalsAndLimitsTabs} active="Metas" />
       </View>
 
       <FlatList
@@ -324,9 +319,9 @@ export default function MetasScreen() {
         </View>
       </View>
 
-      {(modalVisible || routeGoal) && (
+      {(modalVisible || routeGoal || routeNewGoal) && (
         <GoalFormModal
-          visible={modalVisible || Boolean(routeGoal)}
+          visible={modalVisible || Boolean(routeGoal) || routeNewGoal}
           onClose={handleCloseModal}
           editingGoal={routeGoal ?? editingGoal}
         />
@@ -343,22 +338,7 @@ const styles = StyleSheet.create({
   },
   headerPadding: {
     paddingHorizontal: AppSpacing.md,
-  },
-  brandBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingTop: AppSpacing.xs,
-  },
-  brandLockup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: AppSpacing.xs,
-  },
-  brandName: {
-    fontSize: AppFontSize.lg,
-    fontWeight: '800',
-    color: AppColors.primaryDark,
+    paddingBottom: AppSpacing.sm,
   },
   summaryPadding: {
     paddingHorizontal: AppSpacing.md,

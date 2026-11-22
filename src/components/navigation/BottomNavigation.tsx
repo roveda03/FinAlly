@@ -25,7 +25,9 @@ export function BottomNavigation({ items = MainNavigationItems }: BottomNavigati
       accessibilityRole="tablist"
       style={[styles.container, { paddingBottom: Math.max(insets.bottom, AppSpacing.sm) }]}>
       {items.map((item) => {
-        const isActive = pathname === item.route || pathname.startsWith(`${item.route}/`);
+        const isActive = [item.route, ...(item.activeRoutes ?? [])].some(
+          (route) => pathname === route || pathname.startsWith(`${route}/`)
+        );
         return (
           <Pressable
             key={item.route}

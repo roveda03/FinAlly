@@ -2,7 +2,7 @@ import { DefaultTheme, Stack, ThemeProvider, type Theme } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 
 import { AppColors, Routes } from '@/constants';
-import { AuthProvider, FinanceProvider } from '@/contexts';
+import { AuthProvider, ChatProvider, FinanceProvider } from '@/contexts';
 import { useAuth } from '@/hooks/use-auth';
 
 const FinAllyTheme: Theme = {
@@ -41,8 +41,10 @@ export default function RootLayout() {
     <ThemeProvider value={FinAllyTheme}>
       <AuthProvider>
         <FinanceProvider>
-          <StatusBar style="dark" />
-          <RootNavigator />
+          <ChatProvider>
+            <StatusBar style="dark" />
+            <RootNavigator />
+          </ChatProvider>
         </FinanceProvider>
       </AuthProvider>
     </ThemeProvider>

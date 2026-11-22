@@ -24,6 +24,7 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
+  const [authError, setAuthError] = useState<string | null>(null);
 
   function validateEmail(value: string): boolean {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -45,13 +46,14 @@ export default function LoginScreen() {
   }
 
   async function handleLogin() {
+    setAuthError(null);
     if (!validate()) return;
     try {
       await login({ email: email.trim(), password });
       router.replace('/dashboard');
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Erro ao fazer login.';
-      Alert.alert('Erro de autenticação', message);
+      // Exibido na própria tela: Alert.alert não funciona no navegador (react-native-web).
+      setAuthError(err instanceof Error ? err.message : 'Erro ao fazer login.');
     }
   }
 
@@ -103,6 +105,7 @@ export default function LoginScreen() {
             value={email}
             onChangeText={(text) => {
               setEmail(text);
+              setAuthError(null);
               if (errors.email) setErrors((prev) => ({ ...prev, email: undefined }));
             }}
             error={errors.email}
@@ -125,6 +128,7 @@ export default function LoginScreen() {
               value={password}
               onChangeText={(text) => {
                 setPassword(text);
+                setAuthError(null);
                 if (errors.password) setErrors((prev) => ({ ...prev, password: undefined }));
               }}
               error={errors.password}
@@ -148,6 +152,13 @@ export default function LoginScreen() {
               />
             </Pressable>
           </View>
+
+          {authError ? (
+            <View style={styles.authError} accessibilityRole="alert" accessibilityLiveRegion="polite">
+              <Ionicons name="alert-circle" size={20} color={AppColors.expense} />
+              <Text style={styles.authErrorText}>{authError}</Text>
+            </View>
+          ) : null}
 
           <Button title="Entrar" loading={isLoading} onPress={handleLogin} style={styles.loginButton} />
           <View style={styles.orRow}>
@@ -315,6 +326,21 @@ const styles = StyleSheet.create({
     borderColor: '#D5DDDF',
     borderRadius: 14,
     backgroundColor: 'rgba(255,255,255,0.82)',
+  },
+  authError: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: AppSpacing.sm,
+    paddingVertical: AppSpacing.sm,
+    paddingHorizontal: AppSpacing.md,
+    borderRadius: 12,
+    backgroundColor: '#FCE9E9',
+  },
+  authErrorText: {
+    flex: 1,
+    fontSize: AppFontSize.sm,
+    color: AppColors.expense,
+    fontWeight: '600',
   },
   loginButton: {
     backgroundColor: AppColors.primaryDark,

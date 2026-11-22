@@ -2,82 +2,96 @@ import { Ionicons } from '@expo/vector-icons';
 import { useCallback, useMemo, useState } from 'react';
 import {
     Alert,
-    FlatList,
     KeyboardAvoidingView,
     Modal,
     Platform,
     Pressable,
     ScrollView,
+    SectionList,
     StyleSheet,
     Text,
+    TextInput,
     View,
 } from 'react-native';
 
-import { Button, Container, Header } from '@/components/common';
+import { AppTopBar, Button, Container, Header } from '@/components/common';
 import { Input } from '@/components/forms';
-import { AppColors, AppFontSize, AppRadius, AppSpacing, BottomNavigationHeight } from '@/constants';
+import { AppColors, AppFontSize, AppRadius, AppSpacing } from '@/constants';
 import { useFinance } from '@/hooks/use-finance';
-import type { Transaction, TransactionType } from '@/types';
-import { formatCurrency, formatDate } from '@/utils';
+import type { Category, IconName, Transaction, TransactionType } from '@/types';
+import {
+    calculateSummary,
+    formatCurrency,
+    formatDateHeading,
+    isSameMonth,
+    normalizeSearch,
+    parseCurrencyInput,
+    toIsoDate,
+} from '@/utils';
 
-type FilterType = 'all' | 'income' | 'expense';
+type TypeFilter = 'all' | 'income' | 'expense';
+type PeriodFilter = 'all' | 'month' | '30d' | '90d';
 
-// ─── Resumo ──────────────────────────────────────────────────────────
-function Summary() {
-  const { summary } = useFinance();
-  return (
-    <View style={styles.summaryRow}>
-      <View style={[styles.summaryItem, { backgroundColor: AppColors.primaryLight }]}>
-        <Text style={styles.summaryItemLabel}>Receitas</Text>
-        <Text style={[styles.summaryItemValue, { color: AppColors.income }]}>
-          {formatCurrency(summary.totalIncome)}
-        </Text>
-      </View>
-      <View style={[styles.summaryItem, { backgroundColor: '#FDECED' }]}>
-        <Text style={styles.summaryItemLabel}>Despesas</Text>
-        <Text style={[styles.summaryItemValue, { color: AppColors.expense }]}>
-          {formatCurrency(summary.totalExpense)}
-        </Text>
-      </View>
-      <View style={[styles.summaryItem, { backgroundColor: AppColors.white }]}>
-        <Text style={styles.summaryItemLabel}>Saldo</Text>
-        <Text
-          style={[
-            styles.summaryItemValue,
-            { color: summary.balance >= 0 ? AppColors.income : AppColors.expense },
-          ]}>
-          {formatCurrency(summary.balance)}
-        </Text>
-      </View>
-    </View>
-  );
+interface AdvancedFilters {
+  period: PeriodFilter;
+  categoryIds: string[];
 }
 
-// ─── Filtros ─────────────────────────────────────────────────────────
-function Filters({
-  active,
-  onChange,
-}: {
-  active: FilterType;
-  onChange: (f: FilterType) => void;
-}) {
-  const options: { label: string; value: FilterType }[] = [
-    { label: 'Todas', value: 'all' },
-    { label: 'Receitas', value: 'income' },
-    { label: 'Despesas', value: 'expense' },
+const DEFAULT_FILTERS: AdvancedFilters = { period: 'all', categoryIds: [] };
+
+const PERIOD_OPTIONS: { label: string; value: PeriodFilter }[] = [
+  { label: 'Tudo', value: 'all' },
+  { label: 'Este mês', value: 'month' },
+  { label: 'Últimos 30 dias', value: '30d' },
+  { label: 'Últimos 3 meses', value: '90d' },
+];
+
+function daysAgoIso(days: number): string {
+  const date = new Date();
+  date.setDate(date.getDate() - days);
+  return toIsoDate(date);
+}
+
+function matchesPeriod(isoDate: string, period: PeriodFilter): boolean {
+  switch (period) {
+    case 'month':
+      return isSameMonth(isoDate);
+    case '30d':
+      return isoDate >= daysAgoIso(30);
+    case '90d':
+      return isoDate >= daysAgoIso(90);
+    default:
+      return true;
+  }
+}
+
+// ─── Abas por tipo ───────────────────────────────────────────────────
+function TypeTabs({ active, onChange }: { active: TypeFilter; onChange: (f: TypeFilter) => void }) {
+  const options: { label: string; value: TypeFilter; icon?: IconName; color?: string }[] = [
+    { label: 'Todos', value: 'all' },
+    { label: 'Despesas', value: 'expense', icon: 'arrow-down', color: AppColors.expense },
+    { label: 'Receitas', value: 'income', icon: 'arrow-up', color: AppColors.income },
   ];
   return (
-    <View style={styles.filtersRow}>
-      {options.map((o) => (
-        <Pressable
-          key={o.value}
-          style={[styles.filterChip, active === o.value && styles.filterChipActive]}
-          onPress={() => onChange(o.value)}>
-          <Text style={[styles.filterText, active === o.value && styles.filterTextActive]}>
-            {o.label}
-          </Text>
-        </Pressable>
-      ))}
+    <View style={styles.typeTabs} accessibilityRole="tablist">
+      {options.map((o) => {
+        const isActive = active === o.value;
+        return (
+          <Pressable
+            key={o.value}
+            style={[styles.typeTab, isActive && styles.typeTabActive]}
+            onPress={() => onChange(o.value)}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: isActive }}>
+            {o.icon ? (
+              <Ionicons name={o.icon} size={17} color={isActive ? AppColors.white : o.color} />
+            ) : null}
+            <Text style={[styles.typeTabText, isActive && styles.typeTabTextActive]}>
+              {o.label}
+            </Text>
+          </Pressable>
+        );
+      })}
     </View>
   );
 }
@@ -85,35 +99,39 @@ function Filters({
 // ─── Item da lista ───────────────────────────────────────────────────
 function TransactionItem({
   item,
-  categoryName,
+  category,
   onEdit,
   onDelete,
 }: {
   item: Transaction;
-  categoryName: string;
+  category: Category | undefined;
   onEdit: () => void;
   onDelete: () => void;
 }) {
   const isIncome = item.type === 'income';
+  const subtitle = isIncome
+    ? `Receita${category ? ` · ${category.name}` : ''}`
+    : (category?.name ?? '—');
   return (
-    <Pressable style={styles.transactionRow} onPress={onEdit} onLongPress={onDelete}>
-      <View
-        style={[
-          styles.transactionIcon,
-          { backgroundColor: isIncome ? AppColors.primaryLight : '#FDECED' },
-        ]}>
+    <Pressable
+      style={({ pressed }) => [styles.transactionRow, pressed && styles.pressed]}
+      onPress={onEdit}
+      onLongPress={onDelete}
+      accessibilityRole="button"
+      accessibilityHint="Toque para editar. Pressione e segure para excluir.">
+      <View style={styles.transactionIcon}>
         <Ionicons
-          name={isIncome ? 'arrow-up' : 'arrow-down'}
-          size={16}
-          color={isIncome ? AppColors.income : AppColors.expense}
+          name={category?.icon ?? (isIncome ? 'arrow-up' : 'arrow-down')}
+          size={20}
+          color={AppColors.primaryDark}
         />
       </View>
       <View style={styles.transactionInfo}>
         <Text style={styles.transactionDesc} numberOfLines={1}>
           {item.description}
         </Text>
-        <Text style={styles.transactionMeta}>
-          {categoryName} · {formatDate(item.date)}
+        <Text style={styles.transactionMeta} numberOfLines={1}>
+          {subtitle}
         </Text>
       </View>
       <Text
@@ -124,7 +142,140 @@ function TransactionItem({
         {isIncome ? '+ ' : '- '}
         {formatCurrency(item.amount)}
       </Text>
+      <Ionicons name="chevron-forward" size={18} color={AppColors.primaryDark} />
     </Pressable>
+  );
+}
+
+// ─── Resumo do período ───────────────────────────────────────────────
+function PeriodSummary({ transactions }: { transactions: Transaction[] }) {
+  const summary = calculateSummary(transactions);
+  return (
+    <View style={styles.periodSummary}>
+      <View style={styles.periodSummaryIcon}>
+        <Ionicons name="bar-chart" size={20} color={AppColors.primaryDark} />
+      </View>
+      <View style={styles.periodSummaryCopy}>
+        <Text style={styles.periodSummaryTitle}>Resumo do Período</Text>
+        <Text style={styles.periodSummaryText} numberOfLines={2}>
+          Receitas: {formatCurrency(summary.totalIncome)} | Despesas:{' '}
+          {formatCurrency(summary.totalExpense)}
+        </Text>
+      </View>
+      <View style={styles.periodSummaryDivider} />
+      <View style={styles.periodBalance}>
+        <Text style={styles.periodBalanceLabel}>Saldo</Text>
+        <Text
+          style={[
+            styles.periodBalanceValue,
+            { color: summary.balance >= 0 ? AppColors.income : AppColors.expense },
+          ]}>
+          {formatCurrency(summary.balance)}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+// ─── Modal de filtros (funil) ────────────────────────────────────────
+function FiltersModal({
+  initial,
+  onApply,
+  onClose,
+}: {
+  initial: AdvancedFilters;
+  onApply: (filters: AdvancedFilters) => void;
+  onClose: () => void;
+}) {
+  const { categories } = useFinance();
+  const [draft, setDraft] = useState<AdvancedFilters>(initial);
+
+  function toggleCategory(id: string) {
+    setDraft((prev) => ({
+      ...prev,
+      categoryIds: prev.categoryIds.includes(id)
+        ? prev.categoryIds.filter((c) => c !== id)
+        : [...prev.categoryIds, id],
+    }));
+  }
+
+  return (
+    <Modal visible animationType="slide" transparent onRequestClose={onClose}>
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Filtros</Text>
+            <Pressable onPress={onClose} hitSlop={12} accessibilityLabel="Fechar filtros">
+              <Ionicons name="close" size={24} color={AppColors.textSecondary} />
+            </Pressable>
+          </View>
+          <ScrollView contentContainerStyle={styles.modalForm} showsVerticalScrollIndicator={false}>
+            <View style={styles.categorySection}>
+              <Text style={styles.categoryLabel}>Período</Text>
+              <View style={styles.categoryGrid}>
+                {PERIOD_OPTIONS.map((option) => {
+                  const active = draft.period === option.value;
+                  return (
+                    <Pressable
+                      key={option.value}
+                      style={[styles.categoryChip, active && styles.categoryChipActive]}
+                      onPress={() => setDraft((p) => ({ ...p, period: option.value }))}
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected: active }}>
+                      <Text style={[styles.categoryChipText, active && styles.categoryChipTextActive]}>
+                        {option.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+
+            <View style={styles.categorySection}>
+              <Text style={styles.categoryLabel}>Categorias</Text>
+              <View style={styles.categoryGrid}>
+                {categories.map((cat) => {
+                  const active = draft.categoryIds.includes(cat.id);
+                  return (
+                    <Pressable
+                      key={cat.id}
+                      style={[styles.categoryChip, styles.categoryChipRow, active && styles.categoryChipActive]}
+                      onPress={() => toggleCategory(cat.id)}
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked: active }}>
+                      <Ionicons
+                        name={cat.icon}
+                        size={14}
+                        color={active ? AppColors.white : AppColors.primaryDark}
+                      />
+                      <Text style={[styles.categoryChipText, active && styles.categoryChipTextActive]}>
+                        {cat.name}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+
+            <View style={styles.filterActions}>
+              <Button
+                title="Limpar"
+                variant="outline"
+                fullWidth={false}
+                style={styles.filterActionButton}
+                onPress={() => setDraft(DEFAULT_FILTERS)}
+              />
+              <Button
+                title="Aplicar"
+                fullWidth={false}
+                style={styles.filterActionButton}
+                onPress={() => onApply(draft)}
+              />
+            </View>
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
   );
 }
 
@@ -177,7 +328,7 @@ function TransactionFormModal({
   function validate(): boolean {
     const e: Partial<Record<keyof FormData, string>> = {};
     if (!form.description.trim()) e.description = 'Descrição é obrigatória.';
-    const numericAmount = parseFloat(form.amount.replace(',', '.'));
+    const numericAmount = parseCurrencyInput(form.amount);
     if (!form.amount.trim() || isNaN(numericAmount) || numericAmount <= 0)
       e.amount = 'Informe um valor válido.';
     if (!form.categoryId) e.categoryId = 'Selecione uma categoria.';
@@ -188,7 +339,7 @@ function TransactionFormModal({
 
   function handleSave() {
     if (!validate()) return;
-    const amount = parseFloat(form.amount.replace(',', '.'));
+    const amount = parseCurrencyInput(form.amount);
     const data = {
       type: form.type,
       description: form.description.trim(),
@@ -338,7 +489,7 @@ function TransactionEntryScreen({ onClose }: { onClose: () => void }) {
   const selectedCategory = availableCategories.find((category) => category.id === form.categoryId);
 
   function handleSave() {
-    const amount = parseFloat(form.amount.replace(/\./g, '').replace(',', '.'));
+    const amount = parseCurrencyInput(form.amount);
     const dateParts = form.date.split('/');
     const validDate = dateParts.length === 3 && dateParts[2].length === 4;
     const nextErrors: Partial<Record<'amount' | 'categoryId' | 'date', string>> = {};
@@ -519,15 +670,36 @@ function TransactionEntryScreen({ onClose }: { onClose: () => void }) {
 // ─── Tela principal ──────────────────────────────────────────────────
 export default function MovimentacoesScreen() {
   const { transactions, getCategoryById, removeTransaction } = useFinance();
-  const [filter, setFilter] = useState<FilterType>('all');
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
+  const [search, setSearch] = useState('');
+  const [filters, setFilters] = useState<AdvancedFilters>(DEFAULT_FILTERS);
+  const [filtersVisible, setFiltersVisible] = useState(false);
   const [entryVisible, setEntryVisible] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
 
+  const hasAdvancedFilters = filters.period !== 'all' || filters.categoryIds.length > 0;
+
   const filtered = useMemo(() => {
-    if (filter === 'all') return transactions;
-    return transactions.filter((t) => t.type === filter);
-  }, [transactions, filter]);
+    const query = normalizeSearch(search);
+    return transactions
+      .filter((t) => typeFilter === 'all' || t.type === typeFilter)
+      .filter((t) => !query || normalizeSearch(t.description).includes(query))
+      .filter((t) => matchesPeriod(t.date, filters.period))
+      .filter((t) => filters.categoryIds.length === 0 || filters.categoryIds.includes(t.categoryId));
+  }, [transactions, typeFilter, search, filters]);
+
+  // Agrupa por data (mais recentes primeiro), mantendo a ordem de inserção no mesmo dia.
+  const sections = useMemo(() => {
+    const sorted = [...filtered].sort((a, b) => b.date.localeCompare(a.date));
+    const groups: { title: string; date: string; data: Transaction[] }[] = [];
+    for (const t of sorted) {
+      const last = groups[groups.length - 1];
+      if (last && last.date === t.date) last.data.push(t);
+      else groups.push({ title: formatDateHeading(t.date), date: t.date, data: [t] });
+    }
+    return groups;
+  }, [filtered]);
 
   const handleEdit = useCallback((t: Transaction) => {
     setEditingTransaction(t);
@@ -563,18 +735,58 @@ export default function MovimentacoesScreen() {
   }
 
   return (
-    <Container>
-      <Header title="Movimentações" subtitle="Acompanhe suas entradas e saídas." />
-      <Summary />
-      <Filters active={filter} onChange={setFilter} />
+    <Container contentStyle={styles.screenContent}>
+      <AppTopBar />
+      <Header
+        title="Histórico de Movimentações"
+        subtitle="Acompanhe todas as suas receitas e despesas."
+      />
+      <TypeTabs active={typeFilter} onChange={setTypeFilter} />
 
-      <FlatList
-        data={filtered}
+      <View style={styles.searchRow}>
+        <View style={styles.searchBox}>
+          <Ionicons name="search" size={20} color={AppColors.textSecondary} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Buscar por descrição..."
+            placeholderTextColor={AppColors.textSecondary}
+            value={search}
+            onChangeText={setSearch}
+            returnKeyType="search"
+            accessibilityLabel="Buscar por descrição"
+          />
+          {search ? (
+            <Pressable onPress={() => setSearch('')} hitSlop={8} accessibilityLabel="Limpar busca">
+              <Ionicons name="close-circle" size={18} color={AppColors.textSecondary} />
+            </Pressable>
+          ) : null}
+        </View>
+        <Pressable
+          style={[styles.funnelButton, hasAdvancedFilters && styles.funnelButtonActive]}
+          onPress={() => setFiltersVisible(true)}
+          accessibilityRole="button"
+          accessibilityLabel={hasAdvancedFilters ? 'Filtros (ativos)' : 'Filtros'}>
+          <Ionicons
+            name="funnel-outline"
+            size={20}
+            color={hasAdvancedFilters ? AppColors.white : AppColors.primaryDark}
+          />
+        </Pressable>
+      </View>
+
+      <SectionList
+        sections={sections}
         keyExtractor={(item) => item.id}
+        renderSectionHeader={({ section }) => (
+          <View style={styles.sectionHeader}>
+            <Ionicons name="calendar-outline" size={17} color={AppColors.primaryDark} />
+            <Text style={styles.sectionHeaderText}>{section.title}</Text>
+          </View>
+        )}
         renderItem={({ item }) => (
           <TransactionItem
             item={item}
-            categoryName={getCategoryById(item.categoryId)?.name ?? '—'}
+            category={getCategoryById(item.categoryId)}
             onEdit={() => handleEdit(item)}
             onDelete={() => handleDelete(item)}
           />
@@ -584,8 +796,11 @@ export default function MovimentacoesScreen() {
         }
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
+        stickySectionHeadersEnabled={false}
         style={styles.list}
       />
+
+      <PeriodSummary transactions={filtered} />
 
       {/* FAB */}
       <Pressable
@@ -601,6 +816,17 @@ export default function MovimentacoesScreen() {
           visible={modalVisible}
           onClose={handleCloseModal}
           editingTransaction={editingTransaction}
+        />
+      )}
+
+      {filtersVisible && (
+        <FiltersModal
+          initial={filters}
+          onClose={() => setFiltersVisible(false)}
+          onApply={(next) => {
+            setFilters(next);
+            setFiltersVisible(false);
+          }}
         />
       )}
     </Container>
@@ -764,51 +990,78 @@ const styles = StyleSheet.create({
     fontSize: AppFontSize.md,
     fontWeight: '700',
   },
-  /* Summary */
-  summaryRow: {
+  /* Screen */
+  screenContent: {
+    gap: AppSpacing.sm,
+    paddingBottom: AppSpacing.sm,
+  },
+
+  /* Type tabs */
+  typeTabs: {
     flexDirection: 'row',
     gap: AppSpacing.sm,
   },
-  summaryItem: {
+  typeTab: {
     flex: 1,
-    padding: AppSpacing.sm,
-    borderRadius: AppRadius.md,
-    gap: 2,
+    minHeight: 40,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: AppSpacing.xs,
+    borderRadius: AppRadius.full,
+    backgroundColor: '#E6F4EE',
+    borderWidth: 1,
+    borderColor: '#D3EBE0',
   },
-  summaryItemLabel: {
-    fontSize: AppFontSize.sm - 1,
-    color: AppColors.textSecondary,
+  typeTabActive: {
+    backgroundColor: AppColors.primaryDark,
+    borderColor: AppColors.primaryDark,
   },
-  summaryItemValue: {
-    fontSize: AppFontSize.md,
+  typeTabText: {
+    fontSize: AppFontSize.sm + 1,
+    fontWeight: '600',
+    color: AppColors.textPrimary,
+  },
+  typeTabTextActive: {
+    color: AppColors.white,
     fontWeight: '700',
   },
 
-  /* Filters */
-  filtersRow: {
+  /* Search */
+  searchRow: {
     flexDirection: 'row',
+    alignItems: 'center',
     gap: AppSpacing.sm,
   },
-  filterChip: {
-    paddingVertical: AppSpacing.sm,
+  searchBox: {
+    flex: 1,
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: AppSpacing.sm,
     paddingHorizontal: AppSpacing.md,
     borderRadius: AppRadius.full,
+    backgroundColor: '#E6F1EC',
+  },
+  searchInput: {
+    flex: 1,
+    minHeight: 42,
+    fontSize: AppFontSize.md,
+    color: AppColors.textPrimary,
+  },
+  funnelButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: AppColors.white,
     borderWidth: 1,
-    borderColor: AppColors.border,
+    borderColor: '#BFDDD0',
   },
-  filterChipActive: {
-    backgroundColor: AppColors.primary,
-    borderColor: AppColors.primary,
-  },
-  filterText: {
-    fontSize: AppFontSize.sm,
-    color: AppColors.textSecondary,
-    fontWeight: '500',
-  },
-  filterTextActive: {
-    color: AppColors.white,
-    fontWeight: '700',
+  funnelButtonActive: {
+    backgroundColor: AppColors.primaryDark,
+    borderColor: AppColors.primaryDark,
   },
 
   /* List */
@@ -816,8 +1069,22 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   listContent: {
-    paddingBottom: BottomNavigationHeight + 80,
-    gap: AppSpacing.xs,
+    paddingBottom: 80,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: AppSpacing.sm,
+    paddingVertical: AppSpacing.sm,
+    paddingHorizontal: AppSpacing.md,
+    marginTop: AppSpacing.sm,
+    marginBottom: AppSpacing.xs,
+    borderRadius: AppRadius.md,
+    backgroundColor: '#E6F1EC',
+  },
+  sectionHeaderText: {
+    fontSize: AppFontSize.sm + 1,
+    color: AppColors.textPrimary,
   },
 
   /* Transaction */
@@ -827,17 +1094,22 @@ const styles = StyleSheet.create({
     gap: AppSpacing.sm,
     paddingVertical: AppSpacing.sm,
     paddingHorizontal: AppSpacing.sm,
+    marginBottom: AppSpacing.xs,
     backgroundColor: AppColors.white,
     borderRadius: AppRadius.md,
     borderWidth: 1,
     borderColor: AppColors.border,
   },
+  pressed: {
+    opacity: 0.75,
+  },
   transactionIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: AppColors.primaryLight,
   },
   transactionInfo: {
     flex: 1,
@@ -857,11 +1129,72 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
+  /* Period summary */
+  periodSummary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: AppSpacing.sm,
+    padding: AppSpacing.sm,
+    borderRadius: AppRadius.md,
+    backgroundColor: AppColors.white,
+    borderWidth: 1,
+    borderColor: AppColors.border,
+  },
+  periodSummaryIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: AppColors.primaryLight,
+  },
+  periodSummaryCopy: { flex: 1, gap: 2 },
+  periodSummaryTitle: {
+    fontSize: AppFontSize.sm,
+    fontWeight: '700',
+    color: AppColors.textPrimary,
+  },
+  periodSummaryText: {
+    fontSize: AppFontSize.sm - 2,
+    color: AppColors.textSecondary,
+  },
+  periodSummaryDivider: {
+    width: 1,
+    alignSelf: 'stretch',
+    backgroundColor: AppColors.border,
+  },
+  periodBalance: {
+    alignItems: 'center',
+  },
+  periodBalanceLabel: {
+    fontSize: AppFontSize.sm - 1,
+    color: AppColors.textSecondary,
+  },
+  periodBalanceValue: {
+    fontSize: AppFontSize.md,
+    fontWeight: '800',
+  },
+
+  /* Filters modal */
+  categoryChipRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: AppSpacing.xs,
+  },
+  filterActions: {
+    flexDirection: 'row',
+    gap: AppSpacing.sm,
+    marginTop: AppSpacing.xs,
+  },
+  filterActionButton: {
+    flex: 1,
+  },
+
   /* FAB */
   fab: {
     position: 'absolute',
     right: AppSpacing.md,
-    bottom: AppSpacing.md,
+    bottom: 84,
     width: 56,
     height: 56,
     borderRadius: 28,

@@ -6,6 +6,7 @@ export const Routes = {
   dashboard: '/dashboard',
   movimentacoes: '/movimentacoes',
   metas: '/metas',
+  limites: '/limites',
   chatbot: '/chatbot',
 } as const;
 
@@ -15,11 +16,13 @@ export interface NavigationItem {
   label: string;
   route: AppRoute;
   icon: ComponentProps<typeof Ionicons>['name'];
+  /** Outras rotas que também deixam este item destacado. */
+  activeRoutes?: AppRoute[];
 }
 
 export const MainNavigationItems: NavigationItem[] = [
   { label: 'Início', route: Routes.dashboard, icon: 'home' },
   { label: 'Movimentações', route: Routes.movimentacoes, icon: 'swap-horizontal' },
-  { label: 'Metas', route: Routes.metas, icon: 'flag' },
+  { label: 'Metas', route: Routes.metas, icon: 'flag', activeRoutes: [Routes.limites] },
   { label: 'Chatbot', route: Routes.chatbot, icon: 'chatbubble-ellipses' },
 ];

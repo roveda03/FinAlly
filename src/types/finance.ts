@@ -1,9 +1,16 @@
+import type { ComponentProps } from 'react';
+import type { Ionicons } from '@expo/vector-icons';
+
 export type TransactionType = 'income' | 'expense';
+
+export type IconName = ComponentProps<typeof Ionicons>['name'];
 
 export interface Category {
   id: string;
   name: string;
   type: TransactionType;
+  /** Ícone (Ionicons) usado nas listas. */
+  icon: IconName;
 }
 
 export interface Transaction {
@@ -26,8 +33,30 @@ export interface Goal {
   deadline?: string;
 }
 
+/** Limite mensal de gastos para uma categoria de despesa. */
+export interface SpendingLimit {
+  id: string;
+  categoryId: string;
+  amount: number;
+}
+
+export type LimitStatus = 'ok' | 'warning' | 'exceeded';
+
+export interface LimitUsage {
+  limit: SpendingLimit;
+  category: Category | undefined;
+  /** Total gasto na categoria no mês corrente. */
+  spent: number;
+  /** Percentual utilizado (pode passar de 100). */
+  percentage: number;
+  /** Quanto falta para atingir o limite (negativo se ultrapassado). */
+  remaining: number;
+  status: LimitStatus;
+}
+
 export type NewTransaction = Omit<Transaction, 'id'>;
 export type NewGoal = Omit<Goal, 'id'>;
+export type NewSpendingLimit = Omit<SpendingLimit, 'id'>;
 
 export interface FinanceSummary {
   totalIncome: number;

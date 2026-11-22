@@ -1,15 +1,24 @@
 import { createContext, useCallback, useMemo, useState, type ReactNode } from 'react';
 
-import { categories as initialCategories, expenses, goals as initialGoals, incomes } from '@/data';
+import {
+  categories as initialCategories,
+  expenses,
+  goals as initialGoals,
+  incomes,
+  limits as initialLimits,
+} from '@/data';
 import type {
   Category,
   FinanceSummary,
   Goal,
+  LimitUsage,
   NewGoal,
+  NewSpendingLimit,
   NewTransaction,
+  SpendingLimit,
   Transaction,
 } from '@/types';
-import { calculateSummary, generateId } from '@/utils';
+import { calculateLimitUsage, calculateSummary, generateId } from '@/utils';
 
 export interface FinanceContextValue {
   transactions: Transaction[];
@@ -17,6 +26,11 @@ export interface FinanceContextValue {
   expenses: Transaction[];
   categories: Category[];
   goals: Goal[];
+  limits: SpendingLimit[];
+  /** Uso de cada limite no mês corrente, do maior para o menor percentual. */
+  limitUsages: LimitUsage[];
+  /** Limites próximos (>= 80%) ou acima do valor definido. */
+  limitAlerts: LimitUsage[];
   summary: FinanceSummary;
   addTransaction: (data: NewTransaction) => Transaction;
   updateTransaction: (id: string, data: Partial<NewTransaction>) => void;
@@ -24,6 +38,9 @@ export interface FinanceContextValue {
   addGoal: (data: NewGoal) => Goal;
   updateGoal: (id: string, data: Partial<NewGoal>) => void;
   removeGoal: (id: string) => void;
+  addLimit: (data: NewSpendingLimit) => SpendingLimit;
+  updateLimit: (id: string, data: Partial<NewSpendingLimit>) => void;
+  removeLimit: (id: string) => void;
   getCategoryById: (id: string) => Category | undefined;
 }
 
@@ -35,6 +52,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
     ...expenses,
   ]);
   const [goals, setGoals] = useState<Goal[]>(initialGoals);
+  const [limits, setLimits] = useState<SpendingLimit[]>(initialLimits);
   const [categories] = useState<Category[]>(initialCategories);
 
   const addTransaction = useCallback((data: NewTransaction) => {
@@ -65,9 +83,31 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
     setGoals((prev) => prev.filter((g) => g.id !== id));
   }, []);
 
+  const addLimit = useCallback((data: NewSpendingLimit) => {
+    const limit: SpendingLimit = { ...data, id: generateId('lim') };
+    setLimits((prev) => [...prev, limit]);
+    return limit;
+  }, []);
+
+  const updateLimit = useCallback((id: string, data: Partial<NewSpendingLimit>) => {
+    setLimits((prev) => prev.map((l) => (l.id === id ? { ...l, ...data } : l)));
+  }, []);
+
+  const removeLimit = useCallback((id: string) => {
+    setLimits((prev) => prev.filter((l) => l.id !== id));
+  }, []);
+
   const getCategoryById = useCallback(
     (id: string) => categories.find((c) => c.id === id),
     [categories]
+  );
+
+  const limitUsages = useMemo(
+    () =>
+      limits
+        .map((limit) => calculateLimitUsage(limit, transactions, categories))
+        .sort((a, b) => b.percentage - a.percentage),
+    [limits, transactions, categories]
   );
 
   const value = useMemo<FinanceContextValue>(
@@ -77,6 +117,9 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
       expenses: transactions.filter((t) => t.type === 'expense'),
       categories,
       goals,
+      limits,
+      limitUsages,
+      limitAlerts: limitUsages.filter((u) => u.status !== 'ok'),
       summary: calculateSummary(transactions),
       addTransaction,
       updateTransaction,
@@ -84,18 +127,26 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
       addGoal,
       updateGoal,
       removeGoal,
+      addLimit,
+      updateLimit,
+      removeLimit,
       getCategoryById,
     }),
     [
       transactions,
       categories,
       goals,
+      limits,
+      limitUsages,
       addTransaction,
       updateTransaction,
       removeTransaction,
       addGoal,
       updateGoal,
       removeGoal,
+      addLimit,
+      updateLimit,
+      removeLimit,
       getCategoryById,
     ]
   );

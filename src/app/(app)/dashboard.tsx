@@ -1,9 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Card } from '@/components/cards';
-import { Container, Header } from '@/components/common';
+import { AppTopBar, Container, Header } from '@/components/common';
 import { AppColors, AppFontSize, AppRadius, AppSpacing } from '@/constants';
 import { useAuth } from '@/hooks/use-auth';
 import { useFinance } from '@/hooks/use-finance';
@@ -218,15 +218,7 @@ export default function DashboardScreen() {
 
   return (
     <Container scrollable>
-      <View style={styles.brandBar}>
-        <View style={styles.brandLockup}>
-          <Ionicons name="wallet" size={26} color={AppColors.primary} />
-          <Text style={styles.brandName}>FinAlly</Text>
-        </View>
-        <Pressable onPress={() => Alert.alert('Notificações', 'Você está em dia!')} hitSlop={8}>
-          <Ionicons name="notifications-outline" size={23} color={AppColors.primaryDark} />
-        </Pressable>
-      </View>
+      <AppTopBar />
       <Header
         title={`Olá, ${user?.name?.split(' ')[0] ?? 'Usuário'}!`}
         subtitle="Aqui está um resumo das suas finanças:"
@@ -248,22 +240,6 @@ export default function DashboardScreen() {
 
 // ─── Estilos ─────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-  brandBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingTop: AppSpacing.xs,
-  },
-  brandLockup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: AppSpacing.xs,
-  },
-  brandName: {
-    fontSize: AppFontSize.lg,
-    fontWeight: '800',
-    color: AppColors.primaryDark,
-  },
   /* Header */
   headerRight: {
     flexDirection: 'row',
