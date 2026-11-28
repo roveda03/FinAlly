@@ -1,0 +1,1 @@
+"""FinAlly finance API application."""

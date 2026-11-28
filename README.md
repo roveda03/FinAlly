@@ -1,56 +1,47 @@
-# Welcome to your Expo app 👋
+# FinAlly
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+> Organize suas finanças, conquiste seus objetivos.
 
-## Get started
+O **FinAlly** é um aplicativo móvel multiplataforma (Android, iOS e Web) de **gestão financeira pessoal**, desenvolvido com **React Native**, **Expo** e **TypeScript**. Seu objetivo é ajudar o usuário a acompanhar receitas, despesas, limites de gastos por categoria, metas financeiras e obter análises rápidas por meio de um assistente financeiro integrado.
 
-1. Install dependencies
+---
 
-   ```bash
-   npm install
-   ```
+## O que o projeto faz
 
-2. Start the app
+### Autenticação e Sessão
+- **Login e Cadastro:** acesso à conta por e-mail e senha, além de criação de nova conta diretamente pelo aplicativo.
+- **Gerenciamento de Sessão:** manutenção da sessão autenticada com armazenamento seguro de credenciais no dispositivo.
 
-   ```bash
-   npx expo start
-   ```
+### Dashboard (Visão Geral)
+- **Resumo Financeiro:** exibição destacada do **Saldo Atual**, além dos totais de **Receitas** e **Despesas**.
+- **Despesas por Categoria:** visualização gráfica da distribuição dos gastos com percentuais por categoria.
+- **Movimentações Recentes:** acesso rápido aos últimos lançamentos registrados.
 
-In the output, you'll find options to open the app in a
+### Movimentações
+- **Registro Completo:** criação, edição e exclusão de receitas e despesas com descrição, valor, data e categoria.
+- **Categorização:** suporte a categorias de receita (*Salário*, *Freelance*, *Investimentos*) e de despesa (*Alimentação*, *Moradia*, *Transporte*, *Lazer*, *Saúde*, *Educação*).
+- **Busca e Filtros:** pesquisa por descrição e filtragem por tipo (*Todos*, *Despesas*, *Receitas*), período (*Tudo*, *Este mês*, *Últimos 30 dias*, *Últimos 3 meses*) e categorias, com resumo dinâmico do período filtrado.
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+### Limites de Gastos
+- **Controle Mensal por Categoria:** definição e edição de tetos de gastos mensais para cada categoria de despesa.
+- **Acompanhamento Visual:** indicador circular de progresso para o limite em destaque e barras de progresso com valor gasto e percentual utilizado para cada categoria.
+- **Alertas Inteligentes:** avisos visuais quando os gastos se aproximam do limite definido ou o ultrapassam no mês.
 
-You can start developing by editing the files inside the **src/app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+### Metas Financeiras
+- **Planejamento de Objetivos:** criação, edição e exclusão de metas com título, descrição, valor desejado, valor acumulado e prazo.
+- **Progresso:** acompanhamento percentual do quanto já foi acumulado em direção a cada objetivo.
 
-## Get a fresh project
+### Assistente Financeiro (Chatbot)
+- **Atendimento Interativo:** chat integrado para tirar dúvidas e receber orientações sobre finanças pessoais.
+- **Análise de Gastos:** leitura do resumo financeiro mensal (receitas, principais categorias de despesa e alertas de limites) para gerar diagnósticos e sugestões personalizadas, utilizando apenas dados agregados.
+- **Ações Rápidas:** atalhos para solicitar dicas de economia, analisar os gastos do mês ou iniciar a criação de uma nova meta.
 
-When you're ready, run:
+---
 
-```bash
-npm run reset-project
-```
+## Tecnologias Utilizadas
 
-This command will move the starter code to the **example** directory and create a blank **src/app** directory where you can start developing.
-
-### Other setup steps
-
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
-
-## Learn more
-
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+- **React Native** e **Expo** (SDK 58)
+- **Expo Router** (navegação baseada em arquivos)
+- **TypeScript**
+- **Expo Secure Store** (armazenamento seguro de sessão)
+- **Ionicons** (`@expo/vector-icons`)

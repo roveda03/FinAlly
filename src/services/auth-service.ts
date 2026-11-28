@@ -1,26 +1,61 @@
-import { demoPassword, demoUser } from '@/data';
 import type { LoginCredentials, User } from '@/types';
 
-const SIMULATED_DELAY_MS = 600;
+import {
+    apiRequest,
+    clearAuthTokens,
+    getSavedAuthTokens,
+    saveAuthTokens,
+    type AuthTokens,
+} from './api-client';
 
-const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+interface AuthResponse extends AuthTokens {
+  user: User;
+}
 
-/**
- * Autenticação simulada em memória. Pode ser substituída futuramente
- * por uma integração real sem alterar o AuthContext.
- */
 export const authService = {
+  async register(credentials: { name: string; email: string; password: string }): Promise<User> {
+    const response = await apiRequest<AuthResponse>(
+      '/auth/register/',
+      { method: 'POST', body: JSON.stringify(credentials) },
+      { authenticated: false }
+    );
+    await saveAuthTokens({ access: response.access, refresh: response.refresh });
+    return response.user;
+  },
+
   async login({ email, password }: LoginCredentials): Promise<User> {
-    await wait(SIMULATED_DELAY_MS);
-    const isValid =
-      email.trim().toLowerCase() === demoUser.email && password === demoPassword;
-    if (!isValid) {
-      throw new Error('E-mail ou senha inválidos.');
+    const response = await apiRequest<AuthResponse>(
+      '/auth/token/',
+      { method: 'POST', body: JSON.stringify({ email, password }) },
+      { authenticated: false }
+    );
+    await saveAuthTokens({ access: response.access, refresh: response.refresh });
+    return response.user;
+  },
+
+  async restoreSession(): Promise<User | null> {
+    if (!(await getSavedAuthTokens())) return null;
+    try {
+      return await apiRequest<User>('/auth/me/');
+    } catch (error) {
+      if (error instanceof Error && 'status' in error && error.status === 401) {
+        await clearAuthTokens();
+      }
+      throw error;
     }
-    return demoUser;
   },
 
   async logout(): Promise<void> {
-    await wait(SIMULATED_DELAY_MS / 2);
+    const tokens = await getSavedAuthTokens();
+    try {
+      if (tokens) {
+        await apiRequest<void>('/auth/logout/', {
+          method: 'POST',
+          body: JSON.stringify({ refresh: tokens.refresh }),
+        });
+      }
+    } finally {
+      await clearAuthTokens();
+    }
   },
 };

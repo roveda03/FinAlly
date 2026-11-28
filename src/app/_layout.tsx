@@ -1,6 +1,7 @@
 import { DefaultTheme, Stack, ThemeProvider, type Theme } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 
+import { Loading } from '@/components/common';
 import { AppColors, Routes } from '@/constants';
 import { AuthProvider, ChatProvider, FinanceProvider } from '@/contexts';
 import { useAuth } from '@/hooks/use-auth';
@@ -19,7 +20,9 @@ const FinAllyTheme: Theme = {
 };
 
 function RootNavigator() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isLoading } = useAuth();
+
+  if (isLoading) return <Loading fullScreen message="Carregando sua conta..." />;
 
   return (
     <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: AppColors.background } }}>

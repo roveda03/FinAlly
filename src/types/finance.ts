@@ -1,5 +1,5 @@
-import type { ComponentProps } from 'react';
 import type { Ionicons } from '@expo/vector-icons';
+import type { ComponentProps } from 'react';
 
 export type TransactionType = 'income' | 'expense';
 
@@ -30,7 +30,7 @@ export interface Goal {
   targetAmount: number;
   currentAmount: number;
   /** Data limite no formato ISO 8601. */
-  deadline?: string;
+  deadline?: string | null;
 }
 
 /** Limite mensal de gastos para uma categoria de despesa. */
@@ -62,4 +62,11 @@ export interface FinanceSummary {
   totalIncome: number;
   totalExpense: number;
   balance: number;
+}
+
+export interface DashboardData {
+  month: string;
+  summary: FinanceSummary;
+  expensesByCategory: { categoryId: string; name: string; total: number }[];
+  recentTransactions: Transaction[];
 }

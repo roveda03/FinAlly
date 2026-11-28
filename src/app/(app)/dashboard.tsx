@@ -3,7 +3,7 @@ import { router } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Card } from '@/components/cards';
-import { AppTopBar, Container, Header } from '@/components/common';
+import { AppTopBar, Container, Header, Loading } from '@/components/common';
 import { AppColors, AppFontSize, AppRadius, AppSpacing } from '@/constants';
 import { useAuth } from '@/hooks/use-auth';
 import { useFinance } from '@/hooks/use-finance';
@@ -57,20 +57,20 @@ function SummaryCards() {
 const CHART_COLORS = ['#087F5B', '#84BD5B', '#F6A12A', '#4E7CF6', '#9B3FC7', '#C3FAE8'];
 
 function ExpenseByCategoryChart() {
-  const { expenses, getCategoryById } = useFinance();
+  const { expenses, getCategoryById, dashboard } = useFinance();
 
-  const categoryTotals = expenses.reduce<Record<string, { name: string; total: number }>>(
-    (acc, t) => {
-      const cat = getCategoryById(t.categoryId);
-      const name = cat?.name ?? 'Outros';
-      if (!acc[name]) acc[name] = { name, total: 0 };
-      acc[name].total += t.amount;
+  const categoryTotals = expenses.reduce<Record<string, { categoryId: string; name: string; total: number }>>(
+    (acc, transaction) => {
+      const category = getCategoryById(transaction.categoryId);
+      const name = category?.name ?? 'Outros';
+      if (!acc[name]) acc[name] = { categoryId: transaction.categoryId, name, total: 0 };
+      acc[name].total += transaction.amount;
       return acc;
     },
     {}
   );
 
-  const sorted = Object.values(categoryTotals).sort((a, b) => b.total - a.total);
+  const sorted = dashboard?.expensesByCategory ?? Object.values(categoryTotals).sort((a, b) => b.total - a.total);
   const totalExpense = sorted.reduce((s, c) => s + c.total, 0);
   if (totalExpense === 0) return null;
 
@@ -114,8 +114,8 @@ function ExpenseByCategoryChart() {
 
 // ─── Movimentações recentes ──────────────────────────────────────────
 function RecentTransactions() {
-  const { transactions, getCategoryById } = useFinance();
-  const recent = transactions.slice(0, 5);
+  const { transactions, getCategoryById, dashboard } = useFinance();
+  const recent = dashboard?.recentTransactions ?? transactions.slice(0, 5);
 
   return (
     <Card title="Movimentações recentes">
@@ -215,6 +215,9 @@ function FeaturedGoal() {
 // ─── Dashboard ───────────────────────────────────────────────────────
 export default function DashboardScreen() {
   const { user, logout, isLoading } = useAuth();
+  const { isLoading: financeLoading, error } = useFinance();
+
+  if (financeLoading) return <Loading fullScreen message="Carregando suas finanças..." />;
 
   return (
     <Container scrollable>
@@ -230,6 +233,7 @@ export default function DashboardScreen() {
           </Pressable>
         }
       />
+      {error ? <Text style={{ color: AppColors.expense }}>{error}</Text> : null}
       <SummaryCards />
       <ExpenseByCategoryChart />
       <RecentTransactions />

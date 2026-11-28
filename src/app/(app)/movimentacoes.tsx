@@ -14,7 +14,7 @@ import {
     View,
 } from 'react-native';
 
-import { AppTopBar, Button, Container, Header } from '@/components/common';
+import { AppTopBar, Button, Container, Header, Loading } from '@/components/common';
 import { Input } from '@/components/forms';
 import { AppColors, AppFontSize, AppRadius, AppSpacing } from '@/constants';
 import { useFinance } from '@/hooks/use-finance';
@@ -319,6 +319,8 @@ function TransactionFormModal({
     return { ...INITIAL_FORM };
   });
   const [errors, setErrors] = useState<Partial<Record<keyof FormData, string>>>({});
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const filteredCategories = useMemo(
     () => categories.filter((c) => c.type === form.type),
@@ -337,8 +339,8 @@ function TransactionFormModal({
     return Object.keys(e).length === 0;
   }
 
-  function handleSave() {
-    if (!validate()) return;
+  async function handleSave() {
+    if (!validate() || isSaving) return;
     const amount = parseCurrencyInput(form.amount);
     const data = {
       type: form.type,
@@ -347,12 +349,20 @@ function TransactionFormModal({
       categoryId: form.categoryId,
       date: form.date,
     };
-    if (editingTransaction) {
-      updateTransaction(editingTransaction.id, data);
-    } else {
-      addTransaction(data);
+    setIsSaving(true);
+    setSaveError(null);
+    try {
+      if (editingTransaction) {
+        await updateTransaction(editingTransaction.id, data);
+      } else {
+        await addTransaction(data);
+      }
+      onClose();
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : 'Não foi possível salvar.');
+    } finally {
+      setIsSaving(false);
     }
-    onClose();
   }
 
   function handleTypeToggle(type: TransactionType) {
@@ -467,7 +477,8 @@ function TransactionFormModal({
                 </View>
               </View>
 
-              <Button title="Salvar" onPress={handleSave} />
+              {saveError ? <Text style={styles.categoryError}>{saveError}</Text> : null}
+              <Button title="Salvar" loading={isSaving} onPress={handleSave} />
             </ScrollView>
           </View>
         </KeyboardAvoidingView>
@@ -484,11 +495,14 @@ function TransactionEntryScreen({ onClose }: { onClose: () => void }) {
     date: new Date().toLocaleDateString('pt-BR'),
   });
   const [errors, setErrors] = useState<Partial<Record<'amount' | 'categoryId' | 'date', string>>>({});
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [categoryExpanded, setCategoryExpanded] = useState(false);
   const availableCategories = categories.filter((category) => category.type === form.type);
   const selectedCategory = availableCategories.find((category) => category.id === form.categoryId);
 
-  function handleSave() {
+  async function handleSave() {
+    if (isSaving) return;
     const amount = parseCurrencyInput(form.amount);
     const dateParts = form.date.split('/');
     const validDate = dateParts.length === 3 && dateParts[2].length === 4;
@@ -501,14 +515,22 @@ function TransactionEntryScreen({ onClose }: { onClose: () => void }) {
     if (Object.keys(nextErrors).length > 0) return;
 
     const [day, month, year] = dateParts;
-    addTransaction({
-      type: form.type,
-      description: form.description.trim() || (form.type === 'income' ? 'Receita' : 'Despesa'),
-      amount,
-      categoryId: form.categoryId,
-      date: `${year}-${month}-${day}`,
-    });
-    onClose();
+    setIsSaving(true);
+    setSaveError(null);
+    try {
+      await addTransaction({
+        type: form.type,
+        description: form.description.trim() || (form.type === 'income' ? 'Receita' : 'Despesa'),
+        amount,
+        categoryId: form.categoryId,
+        date: `${year}-${month}-${day}`,
+      });
+      onClose();
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : 'Não foi possível salvar.');
+    } finally {
+      setIsSaving(false);
+    }
   }
 
   function changeType(type: TransactionType) {
@@ -659,9 +681,10 @@ function TransactionEntryScreen({ onClose }: { onClose: () => void }) {
         />
       </View>
 
-      <Pressable style={styles.saveEntryButton} onPress={handleSave}>
+      {saveError ? <Text style={styles.entryError}>{saveError}</Text> : null}
+      <Pressable style={styles.saveEntryButton} onPress={handleSave} disabled={isSaving}>
         <Ionicons name="save" size={19} color={AppColors.white} />
-        <Text style={styles.saveEntryText}>Salvar Movimentação</Text>
+        <Text style={styles.saveEntryText}>{isSaving ? 'Salvando...' : 'Salvar Movimentação'}</Text>
       </Pressable>
     </Container>
   );
@@ -669,7 +692,7 @@ function TransactionEntryScreen({ onClose }: { onClose: () => void }) {
 
 // ─── Tela principal ──────────────────────────────────────────────────
 export default function MovimentacoesScreen() {
-  const { transactions, getCategoryById, removeTransaction } = useFinance();
+  const { transactions, getCategoryById, removeTransaction, isLoading, error } = useFinance();
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
   const [search, setSearch] = useState('');
   const [filters, setFilters] = useState<AdvancedFilters>(DEFAULT_FILTERS);
@@ -713,7 +736,11 @@ export default function MovimentacoesScreen() {
         {
           text: 'Excluir',
           style: 'destructive',
-          onPress: () => removeTransaction(t.id),
+          onPress: () => {
+            void removeTransaction(t.id).catch((error: unknown) =>
+              Alert.alert('Erro ao excluir', error instanceof Error ? error.message : 'Tente novamente.')
+            );
+          },
         },
       ]);
     },
@@ -730,6 +757,8 @@ export default function MovimentacoesScreen() {
     setEntryVisible(true);
   }, []);
 
+  if (isLoading) return <Loading fullScreen message="Carregando movimentações..." />;
+
   if (entryVisible) {
     return <TransactionEntryScreen onClose={() => setEntryVisible(false)} />;
   }
@@ -741,6 +770,7 @@ export default function MovimentacoesScreen() {
         title="Histórico de Movimentações"
         subtitle="Acompanhe todas as suas receitas e despesas."
       />
+      {error ? <Text style={{ color: AppColors.expense }}>{error}</Text> : null}
       <TypeTabs active={typeFilter} onChange={setTypeFilter} />
 
       <View style={styles.searchRow}>

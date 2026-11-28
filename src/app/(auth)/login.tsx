@@ -2,6 +2,7 @@ import { useState } from 'react';
 import {
     Alert,
     KeyboardAvoidingView,
+    Modal,
     Platform,
     Pressable,
     ScrollView,
@@ -19,9 +20,14 @@ import { AppColors, AppFontSize, AppSpacing } from '@/constants';
 import { useAuth } from '@/hooks/use-auth';
 
 export default function LoginScreen() {
-  const { login, isLoading } = useAuth();
+  const { login, register, isLoading } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [registerName, setRegisterName] = useState('');
+  const [registerEmail, setRegisterEmail] = useState('');
+  const [registerPassword, setRegisterPassword] = useState('');
+  const [registerVisible, setRegisterVisible] = useState(false);
+  const [registerError, setRegisterError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
   const [authError, setAuthError] = useState<string | null>(null);
@@ -65,10 +71,27 @@ export default function LoginScreen() {
   }
 
   function handleCreateAccount() {
-    Alert.alert(
-      'Criar conta',
-      'O cadastro de novos usuários será implementado em uma próxima versão.'
-    );
+    setRegisterError(null);
+    setRegisterVisible(true);
+  }
+
+  async function handleRegister() {
+    if (!registerName.trim() || !validateEmail(registerEmail) || registerPassword.length < 8) {
+      setRegisterError('Informe nome, e-mail válido e senha com pelo menos 8 caracteres.');
+      return;
+    }
+    setRegisterError(null);
+    try {
+      await register({
+        name: registerName.trim(),
+        email: registerEmail.trim(),
+        password: registerPassword,
+      });
+      setRegisterVisible(false);
+      router.replace('/dashboard');
+    } catch (error) {
+      setRegisterError(error instanceof Error ? error.message : 'Não foi possível criar a conta.');
+    }
   }
 
   return (
@@ -187,6 +210,60 @@ export default function LoginScreen() {
           </View>
         </View>
       </ScrollView>
+      <Modal
+        visible={registerVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setRegisterVisible(false)}>
+        <KeyboardAvoidingView
+          style={styles.registerOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+          <View style={styles.registerContent}>
+            <Text style={styles.registerTitle}>Criar conta</Text>
+            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+              <Input
+                label="Nome"
+                placeholder="Seu nome"
+                value={registerName}
+                onChangeText={setRegisterName}
+                autoCapitalize="words"
+              />
+              <Input
+                label="E-mail"
+                placeholder="voce@exemplo.com"
+                value={registerEmail}
+                onChangeText={setRegisterEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoComplete="email"
+              />
+              <Input
+                label="Senha"
+                placeholder="Mínimo de 8 caracteres"
+                value={registerPassword}
+                onChangeText={setRegisterPassword}
+                secureTextEntry
+                autoCapitalize="none"
+                autoComplete="new-password"
+              />
+              {registerError ? (
+                <Text style={styles.registerError} accessibilityRole="alert">{registerError}</Text>
+              ) : null}
+              <Button
+                title="Criar conta"
+                loading={isLoading}
+                onPress={handleRegister}
+                style={styles.registerButton}
+              />
+              <Button
+                title="Cancelar"
+                variant="outline"
+                onPress={() => setRegisterVisible(false)}
+              />
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -341,6 +418,31 @@ const styles = StyleSheet.create({
     fontSize: AppFontSize.sm,
     color: AppColors.expense,
     fontWeight: '600',
+  },
+  registerOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.35)',
+  },
+  registerContent: {
+    maxHeight: '90%',
+    backgroundColor: AppColors.white,
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
+    padding: AppSpacing.lg,
+  },
+  registerTitle: {
+    color: AppColors.textPrimary,
+    fontSize: AppFontSize.lg,
+    fontWeight: '700',
+    marginBottom: AppSpacing.md,
+  },
+  registerError: {
+    color: AppColors.expense,
+    marginBottom: AppSpacing.sm,
+  },
+  registerButton: {
+    marginBottom: AppSpacing.sm,
   },
   loginButton: {
     backgroundColor: AppColors.primaryDark,

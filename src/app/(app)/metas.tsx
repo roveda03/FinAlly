@@ -2,20 +2,20 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
 import {
-  Alert,
-  FlatList,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
+    Alert,
+    FlatList,
+    KeyboardAvoidingView,
+    Modal,
+    Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    View,
 } from 'react-native';
 
 import { Card } from '@/components/cards';
-import { AppTopBar, Button, Header } from '@/components/common';
+import { AppTopBar, Button, Header, Loading } from '@/components/common';
 import { Input } from '@/components/forms';
 import { GoalsAndLimitsTabs, SegmentedTabs } from '@/components/navigation';
 import { AppColors, AppFontSize, AppRadius, AppSpacing } from '@/constants';
@@ -138,6 +138,8 @@ function GoalFormModal({
     return { ...INITIAL_GOAL_FORM };
   });
   const [errors, setErrors] = useState<Partial<Record<keyof GoalFormData, string>>>({});
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   function validate(): boolean {
     const e: Partial<Record<keyof GoalFormData, string>> = {};
@@ -151,21 +153,29 @@ function GoalFormModal({
     return Object.keys(e).length === 0;
   }
 
-  function handleSave() {
-    if (!validate()) return;
+  async function handleSave() {
+    if (!validate() || isSaving) return;
     const data = {
       title: form.title.trim(),
-      description: form.description.trim() || undefined,
+      description: form.description.trim(),
       targetAmount: parseFloat(form.targetAmount.replace(',', '.')),
       currentAmount: parseFloat(form.currentAmount.replace(',', '.')),
-      deadline: form.deadline.trim() || undefined,
+      deadline: form.deadline.trim() || null,
     };
-    if (editingGoal) {
-      updateGoal(editingGoal.id, data);
-    } else {
-      addGoal(data);
+    setIsSaving(true);
+    setSaveError(null);
+    try {
+      if (editingGoal) {
+        await updateGoal(editingGoal.id, data);
+      } else {
+        await addGoal(data);
+      }
+      onClose();
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : 'Não foi possível salvar.');
+    } finally {
+      setIsSaving(false);
     }
-    onClose();
   }
 
   return (
@@ -237,7 +247,8 @@ function GoalFormModal({
                 value={form.deadline}
                 onChangeText={(t) => setForm((p) => ({ ...p, deadline: t }))}
               />
-              <Button title="Salvar" onPress={handleSave} />
+              {saveError ? <Text style={{ color: AppColors.expense }}>{saveError}</Text> : null}
+              <Button title="Salvar" loading={isSaving} onPress={handleSave} />
             </ScrollView>
           </View>
         </KeyboardAvoidingView>
@@ -248,7 +259,7 @@ function GoalFormModal({
 
 // ─── Tela principal ──────────────────────────────────────────────────
 export default function MetasScreen() {
-  const { goals, removeGoal } = useFinance();
+  const { goals, removeGoal, isLoading, error } = useFinance();
   const { goalId, novaMeta } = useLocalSearchParams<{ goalId?: string; novaMeta?: string }>();
   const routeGoal = goals.find((goal) => goal.id === goalId);
   const routeNewGoal = novaMeta === '1';
@@ -267,7 +278,11 @@ export default function MetasScreen() {
         {
           text: 'Excluir',
           style: 'destructive',
-          onPress: () => removeGoal(g.id),
+          onPress: () => {
+            void removeGoal(g.id).catch((error: unknown) =>
+              Alert.alert('Erro ao excluir', error instanceof Error ? error.message : 'Tente novamente.')
+            );
+          },
         },
       ]);
     },
@@ -285,11 +300,14 @@ export default function MetasScreen() {
     setModalVisible(true);
   }, []);
 
+  if (isLoading) return <Loading fullScreen message="Carregando metas..." />;
+
   return (
     <SafeAreaView edges={['top', 'left', 'right']} style={styles.safeArea}>
       <View style={styles.headerPadding}>
         <AppTopBar />
         <Header title="Minhas Metas" subtitle="Defina objetivos e acompanhe seu progresso!" />
+        {error ? <Text style={{ color: AppColors.expense }}>{error}</Text> : null}
         <SegmentedTabs tabs={GoalsAndLimitsTabs} active="Metas" />
       </View>
 
@@ -299,7 +317,9 @@ export default function MetasScreen() {
         renderItem={({ item }) => (
           <GoalCard goal={item} onEdit={() => handleEdit(item)} onDelete={() => handleDelete(item)} />
         )}
-        ListEmptyComponent={<Text style={styles.emptyText}>Nenhuma meta cadastrada.</Text>}
+        ListEmptyComponent={
+          <Text style={styles.emptyText}>{error ?? 'Nenhuma meta cadastrada.'}</Text>
+        }
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
         style={styles.list}
